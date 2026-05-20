@@ -107,31 +107,43 @@ fn process_upscale_inner(
     
     // 3. Recursive Upscale Loop
     let mut current_img = img;
-    let mut current_scale = 1;
+    let mut current_scale: u32 = 1;
     let target_scale = scale_factor as u32;
     let tiler = Tiler::new(512, 32);
 
+    writeln!(log, "  [Start] Dimensions: {}x{}, Target Scale: {}x", current_img.width(), current_img.height(), target_scale)?;
+
     while current_scale < target_scale {
         let (w, h) = current_img.dimensions();
-        writeln!(log, "  [Step {}] Dimensions: {}x{}", current_scale, w, h)?;
+        let next_scale = current_scale * 4;
+        writeln!(log, "  [Loop] Pass {}x -> {}x", current_scale, next_scale)?;
         
         let tiles = tiler.split(&current_img);
-        let mut upscaled_tiles = Vec::new();
+        writeln!(log, "  [Loop] Created {} tiles for {}x{} image", tiles.len(), w, h)?;
         
-        for tile in tiles {
+        let mut upscaled_tiles = Vec::new();
+        for (i, tile) in tiles.into_iter().enumerate() {
             let (input_tensor, alpha_mask) = image_to_array(&tile.data);
             let output_tensor = engine.predict(input_tensor)?;
             let mut upscaled_img = array_to_image(output_tensor);
             
+            // Re-apply alpha mask if it existed
             if let Some(mask) = alpha_mask {
                 let scaled_mask = image::imageops::resize(&mask, upscaled_img.width(), upscaled_img.height(), image::imageops::FilterType::CatmullRom);
                 let mut upscaled_rgba = upscaled_img.to_rgba8();
-                for (x, y, pixel) in upscaled_rgba.enumerate_pixels_mut() {
-                    pixel[3] = scaled_mask.get_pixel(x, y)[0];
+                for y in 0..upscaled_rgba.height() {
+                    for x in 0..upscaled_rgba.width() {
+                        let m = scaled_mask.get_pixel(x, y)[0];
+                        upscaled_rgba.get_pixel_mut(x, y)[3] = m;
+                    }
                 }
                 upscaled_img = image::DynamicImage::ImageRgba8(upscaled_rgba);
             }
             
+            if i == 0 {
+                writeln!(log, "  [Loop] Tile 0 Upscale: {}x{} -> {}x{}", tile.width, tile.height, upscaled_img.width(), upscaled_img.height())?;
+            }
+
             upscaled_tiles.push(UpscaledTile {
                 x: tile.x,
                 y: tile.y,
@@ -139,15 +151,20 @@ fn process_upscale_inner(
             });
         }
         
+        // The scale factor for merge is always 4 because the model is x4
         current_img = tiler.merge(upscaled_tiles, 4, w * 4, h * 4);
-        current_scale *= 4;
+        current_scale = next_scale;
+        
+        writeln!(log, "  [Loop] Resulting dimensions: {}x{}", current_img.width(), current_img.height())?;
+
+        if current_scale > 256 { break; } // Safety
     }
 
-    let mut final_img = if current_scale != target_scale {
-        let (cur_w, cur_h) = current_img.dimensions();
-        let target_w = orig_w * target_scale;
-        let target_h = orig_h * target_scale;
-        writeln!(log, "  Final Resize: from {}x{} to {}x{}", cur_w, cur_h, target_w, target_h)?;
+    let target_w = orig_w * target_scale;
+    let target_h = orig_h * target_scale;
+    
+    let mut final_img = if current_img.width() != target_w || current_img.height() != target_h {
+        writeln!(log, "  [Final] Resizing from {}x{} to target {}x{}", current_img.width(), current_img.height(), target_w, target_h)?;
         current_img.resize_exact(target_w, target_h, image::imageops::FilterType::CatmullRom)
     } else {
         current_img
