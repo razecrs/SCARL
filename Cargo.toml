@@ -1,0 +1,26 @@
+[package]
+name = "scarl_core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "scarl_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# ONNX Runtime for high-performance AI inference
+ort = { version = "2.0.0-rc.12", features = ["directml", "copy-dylibs", "half"] }
+
+# Image processing and I/O
+image = "0.24"
+ndarray = "0.17"
+half = "2.7.1"
+
+# Serialization and Error handling
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+libc = "0.2"
+
+# File management
+tempfile = "3.10"
