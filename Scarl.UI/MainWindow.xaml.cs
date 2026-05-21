@@ -376,19 +376,26 @@ namespace Scarl.UI
                     output = System.IO.Path.ChangeExtension(output, ".png");
                 }
 
-                int targetScale = 4; // default
+                int targetW = 0, targetH = 0;
                 try {
                     using (var stream = new FileStream(input, FileMode.Open, FileAccess.Read, FileShare.Read))
                     {
                         var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
                         if (decoder.Frames.Count > 0)
                         {
-                            targetScale = GetTargetScale(decoder.Frames[0].PixelWidth, decoder.Frames[0].PixelHeight);
+                            int index = (int)Math.Round(MultiplierSlider.Value);
+                            int targetRes = _resolutionSteps[index];
+                            int origW = decoder.Frames[0].PixelWidth;
+                            int origH = decoder.Frames[0].PixelHeight;
+                            
+                            float scale = (float)targetRes / Math.Max(origW, origH);
+                            targetW = (int)(origW * scale);
+                            targetH = (int)(origH * scale);
                         }
                     }
                 } catch {}
 
-                bool success = await Task.Run(() => CoreEngine.RunUpscale(input, output, modelName, targetScale, vibrancy, sharpness, depixelate, presetMode));
+                bool success = await Task.Run(() => CoreEngine.RunUpscale(input, output, modelName, targetW, targetH, vibrancy, sharpness, depixelate, presetMode));
 
                 if (success)
                 {

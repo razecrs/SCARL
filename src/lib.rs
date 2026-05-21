@@ -13,7 +13,8 @@ pub extern "C" fn upscale_image(
     input_path: *const c_char,
     output_path: *const c_char,
     model_name: *const c_char,
-    scale: i32,
+    target_width: i32,
+    target_height: i32,
     vibrancy: f32,
     sharpness: f32,
     depixelate: f32,
@@ -23,7 +24,7 @@ pub extern "C" fn upscale_image(
     let output = unsafe { CStr::from_ptr(output_path).to_string_lossy().into_owned() };
     let model = unsafe { CStr::from_ptr(model_name).to_string_lossy().into_owned() };
 
-    match process_upscale(&input, &output, &model, scale, vibrancy, sharpness, depixelate, preset_mode) {
+    match process_upscale(&input, &output, &model, target_width as u32, target_height as u32, vibrancy, sharpness, depixelate, preset_mode) {
         Ok(_) => 0,
         Err(e) => {
             eprintln!("Error during upscale: {}", e);
@@ -36,16 +37,17 @@ fn process_upscale(
     input_path: &str, 
     output_path: &str, 
     model_name: &str,
-    scale_factor: i32,
+    target_w: u32,
+    target_h: u32,
     vibrancy: f32,
     sharpness: f32,
     depixelate: f32,
     preset_mode: i32
 ) -> anyhow::Result<()> {
     let result = if preset_mode == 2 || input_path.to_lowercase().ends_with(".gif") {
-        process_upscale_gif(input_path, output_path, model_name, scale_factor, vibrancy, sharpness, depixelate)
+        process_upscale_gif(input_path, output_path, model_name, target_w, target_h, vibrancy, sharpness, depixelate)
     } else {
-        process_upscale_inner(input_path, output_path, model_name, scale_factor, vibrancy, sharpness, depixelate, preset_mode)
+        process_upscale_inner(input_path, output_path, model_name, target_w, target_h, vibrancy, sharpness, depixelate, preset_mode)
     };
     
     match result {
@@ -64,7 +66,8 @@ fn process_upscale_inner(
     input_path: &str, 
     output_path: &str, 
     model_name: &str,
-    scale_factor: i32,
+    target_w: u32,
+    target_h: u32,
     vibrancy: f32,
     sharpness: f32,
     depixelate: f32,
@@ -72,10 +75,9 @@ fn process_upscale_inner(
 ) -> anyhow::Result<()> {
     use std::io::Write;
     let mut log = std::fs::File::create("scarl_debug.log")?;
-    writeln!(log, "Starting upscale: input={}, output={}, model={}, scale={}, preset={}", input_path, output_path, model_name, scale_factor, preset_mode)?;
+    writeln!(log, "Starting upscale: input={}, output={}, target={}x{}, preset={}", input_path, output_path, target_w, target_h, preset_mode)?;
 
     // 1. Load Engine
-    writeln!(log, "Loading engine...")?;
     let mut engine = match UpscaleEngine::new(model_name) {
         Ok(e) => e,
         Err(e) => {
@@ -85,7 +87,6 @@ fn process_upscale_inner(
     };
     
     // 2. Load Image
-    writeln!(log, "Loading image from: {}...", input_path)?;
     let mut img = match crate::utils::load_image_from_path(input_path) {
         Ok(i) => i,
         Err(e) => {
@@ -96,38 +97,27 @@ fn process_upscale_inner(
 
     // Pre-processing: De-pixelate / Smoothing
     if depixelate > 0.0 {
-        writeln!(log, "Applying de-pixelate smoothing (sigma = {})...", depixelate)?;
         let rgb_img = img.to_rgb8();
         let blurred = image::imageops::blur(&rgb_img, depixelate);
         img = image::DynamicImage::ImageRgb8(blurred);
     }
 
-    let (orig_w, orig_h) = img.dimensions();
-    writeln!(log, "Image dimensions: {}x{}", orig_w, orig_h)?;
-    
-    // 3. Recursive Upscale Loop
+    // 3. Multi-Pass AI Upscaling
     let mut current_img = img;
-    let mut current_scale: u32 = 1;
-    let target_scale = scale_factor as u32;
     let tiler = Tiler::new(512, 32);
 
-    writeln!(log, "  [Start] Dimensions: {}x{}, Target Scale: {}x", current_img.width(), current_img.height(), target_scale)?;
-
-    while current_scale < target_scale {
+    while current_img.width() < target_w || current_img.height() < target_h {
         let (w, h) = current_img.dimensions();
-        let next_scale = current_scale * 4;
-        writeln!(log, "  [Loop] Pass {}x -> {}x", current_scale, next_scale)?;
+        writeln!(log, "  [Pass] Growing {}x{} -> {}x{}", w, h, w * 4, h * 4)?;
         
         let tiles = tiler.split(&current_img);
-        writeln!(log, "  [Loop] Created {} tiles for {}x{} image", tiles.len(), w, h)?;
-        
         let mut upscaled_tiles = Vec::new();
+        
         for (i, tile) in tiles.into_iter().enumerate() {
             let (input_tensor, alpha_mask) = image_to_array(&tile.data);
             let output_tensor = engine.predict(input_tensor)?;
             let mut upscaled_img = array_to_image(output_tensor);
             
-            // Re-apply alpha mask if it existed
             if let Some(mask) = alpha_mask {
                 let scaled_mask = image::imageops::resize(&mask, upscaled_img.width(), upscaled_img.height(), image::imageops::FilterType::CatmullRom);
                 let mut upscaled_rgba = upscaled_img.to_rgba8();
@@ -141,7 +131,7 @@ fn process_upscale_inner(
             }
             
             if i == 0 {
-                writeln!(log, "  [Loop] Tile 0 Upscale: {}x{} -> {}x{}", tile.width, tile.height, upscaled_img.width(), upscaled_img.height())?;
+                writeln!(log, "  [Tile] Sample Tile size upscaled to {}x{}", upscaled_img.width(), upscaled_img.height())?;
             }
 
             upscaled_tiles.push(UpscaledTile {
@@ -151,20 +141,15 @@ fn process_upscale_inner(
             });
         }
         
-        // The scale factor for merge is always 4 because the model is x4
+        // The merge MUST use exactly w*4 to grow correctly
         current_img = tiler.merge(upscaled_tiles, 4, w * 4, h * 4);
-        current_scale = next_scale;
         
-        writeln!(log, "  [Loop] Resulting dimensions: {}x{}", current_img.width(), current_img.height())?;
-
-        if current_scale > 256 { break; } // Safety
+        if current_img.width() > 60000 { break; } // Safety
     }
 
-    let target_w = orig_w * target_scale;
-    let target_h = orig_h * target_scale;
-    
+    // 4. Precision Resize to Target
     let mut final_img = if current_img.width() != target_w || current_img.height() != target_h {
-        writeln!(log, "  [Final] Resizing from {}x{} to target {}x{}", current_img.width(), current_img.height(), target_w, target_h)?;
+        writeln!(log, "  [Final] Precision resize {}x{} to {}x{}", current_img.width(), current_img.height(), target_w, target_h)?;
         current_img.resize_exact(target_w, target_h, image::imageops::FilterType::CatmullRom)
     } else {
         current_img
@@ -209,7 +194,8 @@ fn process_upscale_gif(
     input_path: &str, 
     output_path: &str, 
     model_name: &str,
-    scale_factor: i32,
+    target_w: u32,
+    target_h: u32,
     vibrancy: f32,
     sharpness: f32,
     depixelate: f32
@@ -220,7 +206,7 @@ fn process_upscale_gif(
     use std::fs::File;
 
     let mut log = File::create("scarl_debug.log")?;
-    writeln!(log, "Starting GIF upscale: input={}", input_path)?;
+    writeln!(log, "Starting GIF upscale: input={}, target={}x{}", input_path, target_w, target_h)?;
 
     let file = File::open(input_path)?;
     let decoder = GifDecoder::new(file)?;
@@ -246,14 +232,10 @@ fn process_upscale_gif(
             img = image::DynamicImage::ImageRgba8(blurred);
         }
 
-        let (orig_w, orig_h) = img.dimensions();
-        
         // Recursive Upscale Loop for GIF Frame
         let mut current_img = img;
-        let mut current_scale = 1;
-        let target_scale = scale_factor as u32;
         
-        while current_scale < target_scale {
+        while current_img.width() < target_w || current_img.height() < target_h {
             let (w, h) = current_img.dimensions();
             let tiles = tiler.split(&current_img);
             let mut upscaled_tiles = Vec::new();
@@ -265,13 +247,13 @@ fn process_upscale_gif(
                 
                 if let Some(mask) = alpha_mask {
                     let scaled_mask = image::imageops::resize(&mask, upscaled_img.width(), upscaled_img.height(), image::imageops::FilterType::CatmullRom);
-                    for y in 0..upscaled_img.height() {
-                        for x in 0..upscaled_img.width() {
-                            let mut p = upscaled_img.get_pixel(x, y).clone();
-                            p[3] = scaled_mask.get_pixel(x, y)[0];
-                            image::GenericImage::put_pixel(&mut upscaled_img, x, y, p);
+                    let mut upscaled_rgba = upscaled_img.to_rgba8();
+                    for y in 0..upscaled_rgba.height() {
+                        for x in 0..upscaled_rgba.width() {
+                            upscaled_rgba.get_pixel_mut(x, y)[3] = scaled_mask.get_pixel(x, y)[0];
                         }
                     }
+                    upscaled_img = image::DynamicImage::ImageRgba8(upscaled_rgba);
                 }
                 
                 upscaled_tiles.push(UpscaledTile {
@@ -282,11 +264,11 @@ fn process_upscale_gif(
             }
             
             current_img = tiler.merge(upscaled_tiles, 4, w * 4, h * 4);
-            current_scale *= 4;
+            if current_img.width() > 40000 { break; }
         }
         
-        let mut final_img = if current_scale != target_scale {
-            current_img.resize_exact(orig_w * target_scale, orig_h * target_scale, image::imageops::FilterType::CatmullRom)
+        let mut final_img = if current_img.width() != target_w || current_img.height() != target_h {
+            current_img.resize_exact(target_w, target_h, image::imageops::FilterType::CatmullRom)
         } else {
             current_img
         };
