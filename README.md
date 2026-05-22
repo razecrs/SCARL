@@ -20,8 +20,14 @@ Scarl is committed to being **100% Free and Ad-Free**. No subscriptions, no data
 - **Mobile**: .NET MAUI (Planned)
 - **Installer**: NSIS
 
+<<<<<<< HEAD
 ##  Installation
 Download the latest installer from the Releases page.
+=======
+##  Installation
+- **Installer**: Download the latest installer from the [Releases](https://github.com/razecrs/SCARL/releases) page.
+- **Portable Edition**: Download `scarl-portable.zip` from the [Releases](https://github.com/razecrs/SCARL/releases) page, extract it anywhere, and double-click `Run Scarl.bat` to launch. Includes both the pre-compiled app and the clean offline source code!
+>>>>>>> 6e7e99f (Added portable edition download instructions to README.md. ITS RAZE SO ITS CRAZE)
 
 ##  License
 Scarl is provided "as is" for free.

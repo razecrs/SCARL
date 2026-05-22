@@ -9,40 +9,49 @@ namespace Scarl.UI
 {
     public static class ModelDownloader
     {
-        private static readonly string ModelBaseUrl = "https://huggingface.co/skytnt/anime-tagger/resolve/main/";
-        private static readonly string[] ModelFiles = {
-            "characters.txt", "classifier.onnx", "clip_merges.txt", "clip_text.onnx",
-            "clip_vision.onnx", "clip_vocab.json", "hat-x4.onnx", "imagenet_labels.txt",
-            "RealESRGAN_x2_fp16.onnx", "RealESRGAN_x4.onnx", "RealESRGAN_x8_fp16.onnx",
-            "realesrgan-x2.onnx", "realesrgan-x4.onnx", "realesrgan-x8.onnx"
+        private static readonly string ModelBaseUrl = "https://github.com/razecrs/SCARL/releases/download/v1.0.0/";
+        
+        public static readonly string[] CoreModels = {
+            "realesrgan-x4.onnx", "RealESRGAN_x4.onnx"
         };
 
-        public static bool ModelsExist()
+        public static readonly string[] QualityModels = {
+            "hat-x4.onnx", "realesrgan-x2.onnx", "realesrgan-x8.onnx", 
+            "RealESRGAN_x2_fp16.onnx", "RealESRGAN_x8_fp16.onnx"
+        };
+
+        public static readonly string[] VisionModels = {
+            "characters.txt", "classifier.onnx", "clip_merges.txt", "clip_text.onnx",
+            "clip_vision.onnx", "clip_vocab.json", "imagenet_labels.txt"
+        };
+
+        public static bool ModelsExist(string[] fileList)
         {
             string modelDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models");
             if (!Directory.Exists(modelDir)) return false;
-            foreach (var file in ModelFiles)
+            foreach (var file in fileList)
             {
                 if (!File.Exists(Path.Combine(modelDir, file))) return false;
             }
             return true;
         }
 
-        public static async Task DownloadModels(Action<double, string> progressCallback)
+        public static async Task DownloadModels(IEnumerable<string> fileList, Action<double, string> progressCallback)
         {
             string modelDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models");
             if (!Directory.Exists(modelDir)) Directory.CreateDirectory(modelDir);
 
             using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromMinutes(60); // 1 hour timeout for massive models
+            client.Timeout = TimeSpan.FromMinutes(60);
 
-            for (int i = 0; i < ModelFiles.Length; i++)
+            var files = new List<string>(fileList);
+            for (int i = 0; i < files.Count; i++)
             {
-                string fileName = ModelFiles[i];
+                string fileName = files[i];
                 string filePath = Path.Combine(modelDir, fileName);
                 if (File.Exists(filePath)) continue;
 
-                progressCallback((double)i / ModelFiles.Length * 100, $"Downloading {fileName}...");
+                progressCallback((double)i / files.Count * 100, $"Downloading {fileName}...");
 
                 try
                 {
@@ -57,7 +66,7 @@ namespace Scarl.UI
                     throw new Exception($"Failed to download {fileName}: {ex.Message}");
                 }
             }
-            progressCallback(100, "All models ready!");
+            progressCallback(100, "Setup ready!");
         }
     }
 }

@@ -66,10 +66,62 @@ namespace Scarl.UI
         public MainWindow()
         {
             InitializeComponent();
-            _settings = AppSettings.Load();
+            try {
+                _settings = AppSettings.Load();
+            } catch {
+                _settings = new AppSettings();
+            }
             ApplySettings();
             UpdateUiState();
-            this.Loaded += (s, e) => EnableBlur();
+            this.Loaded += async (s, e) => {
+                try { EnableBlur(); } catch { }
+                await CheckModelsAsync();
+            };
+        }
+
+        private async Task CheckModelsAsync()
+        {
+            if (!ModelDownloader.ModelsExist(ModelDownloader.CoreModels))
+            {
+                var result = MessageBox.Show(
+                    "Scarl AI engines are missing.\n\nWould you like to perform a FULL SETUP? (Approx 2.2GB - Includes character detection and max-quality HAT models)\n\nClick 'No' for BASIC SETUP (Fastest, 140MB - Upscaling only).",
+                    "AI Setup Required",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Question
+                );
+
+                if (result == MessageBoxResult.Cancel) { this.Close(); return; }
+
+                var downloadList = new List<string>(ModelDownloader.CoreModels);
+                if (result == MessageBoxResult.Yes)
+                {
+                    downloadList.AddRange(ModelDownloader.QualityModels);
+                    downloadList.AddRange(ModelDownloader.VisionModels);
+                }
+
+                StatusText.Text = "DOWNLOADING AI ENGINES...";
+                ProcessingBar.Visibility = Visibility.Visible;
+                ProcessingBar.IsIndeterminate = false;
+                ProcessingBar.Value = 0;
+                ActionButton.IsEnabled = false;
+
+                try
+                {
+                    await ModelDownloader.DownloadModels(downloadList, (progress, msg) => {
+                        Dispatcher.Invoke(() => {
+                            ProcessingBar.Value = progress;
+                            StatusText.Text = msg.ToUpper();
+                        });
+                    });
+                    MessageBox.Show("Engines ready! Scarl is now functional.", "Setup Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Setup failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    this.Close();
+                }
+            }
+            UpdateUiState();
         }
 
         private void EnableBlur()
