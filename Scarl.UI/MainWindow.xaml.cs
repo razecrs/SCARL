@@ -458,10 +458,19 @@ namespace Scarl.UI
                             var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
                             if (decoder.Frames.Count > 0)
                             {
-                                var frame = decoder.Frames[0];
-                                int targetScale = GetTargetScale(frame.PixelWidth, frame.PixelHeight);
-                                int finalWidth = frame.PixelWidth * targetScale;
-                                int finalHeight = frame.PixelHeight * targetScale;
+                                 var frame = decoder.Frames[0];
+                                 int finalWidth, finalHeight;
+                                 if (UseCustomResolutionCheckbox.IsChecked == true)
+                                 {
+                                     if (!int.TryParse(CustomWidthInput.Text, out finalWidth) || finalWidth <= 0) finalWidth = 2000;
+                                     if (!int.TryParse(CustomHeightInput.Text, out finalHeight) || finalHeight <= 0) finalHeight = 3000;
+                                 }
+                                 else
+                                 {
+                                     int targetScale = GetTargetScale(frame.PixelWidth, frame.PixelHeight);
+                                     finalWidth = frame.PixelWidth * targetScale;
+                                     finalHeight = frame.PixelHeight * targetScale;
+                                 }
 
                                 // Boundary check for extreme resolutions
                                 if (finalWidth > 50000 || finalHeight > 50000)
@@ -557,14 +566,22 @@ namespace Scarl.UI
                         var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
                         if (decoder.Frames.Count > 0)
                         {
-                            int index = (int)Math.Round(MultiplierSlider.Value);
-                            int targetRes = _resolutionSteps[index];
-                            int origW = decoder.Frames[0].PixelWidth;
-                            int origH = decoder.Frames[0].PixelHeight;
-                            
-                            float scale = (float)targetRes / Math.Max(origW, origH);
-                            targetW = (int)(origW * scale);
-                            targetH = (int)(origH * scale);
+                             if (UseCustomResolutionCheckbox.IsChecked == true)
+                             {
+                                 if (!int.TryParse(CustomWidthInput.Text, out targetW) || targetW <= 0) targetW = 2000;
+                                 if (!int.TryParse(CustomHeightInput.Text, out targetH) || targetH <= 0) targetH = 3000;
+                             }
+                             else
+                             {
+                                 int index = (int)Math.Round(MultiplierSlider.Value);
+                                 int targetRes = _resolutionSteps[index];
+                                 int origW = decoder.Frames[0].PixelWidth;
+                                 int origH = decoder.Frames[0].PixelHeight;
+                                 
+                                 float scale = (float)targetRes / Math.Max(origW, origH);
+                                 targetW = (int)(origW * scale);
+                                 targetH = (int)(origH * scale);
+                             }
                         }
                     }
                 } catch {}
@@ -869,6 +886,22 @@ namespace Scarl.UI
             
             // Minimum scale is 1
             return (int)Math.Max(1, Math.Ceiling(scale));
+        }
+
+        private void UseCustomResolutionCheckbox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (CustomResolutionPanel != null)
+            {
+                CustomResolutionPanel.Visibility = UseCustomResolutionCheckbox.IsChecked == true
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
+        }
+
+        private void NumberValidationTextBox(object sender, System.Windows.Input.TextCompositionEventArgs e)
+        {
+            var regex = new System.Text.RegularExpressions.Regex("[^0-9]+");
+            e.Handled = regex.IsMatch(e.Text);
         }
 
         private void Close_Click(object sender, RoutedEventArgs e)
