@@ -73,55 +73,9 @@ namespace Scarl.UI
             }
             ApplySettings();
             UpdateUiState();
-            this.Loaded += async (s, e) => {
+            this.Loaded += (s, e) => {
                 try { EnableBlur(); } catch { }
-                await CheckModelsAsync();
             };
-        }
-
-        private async Task CheckModelsAsync()
-        {
-            if (!ModelDownloader.ModelsExist(ModelDownloader.CoreModels))
-            {
-                var result = MessageBox.Show(
-                    "Scarl AI engines are missing.\n\nWould you like to perform a FULL SETUP? (Approx 2.2GB - Includes character detection and max-quality HAT models)\n\nClick 'No' for BASIC SETUP (Fastest, 140MB - Upscaling only).",
-                    "AI Setup Required",
-                    MessageBoxButton.YesNoCancel,
-                    MessageBoxImage.Question
-                );
-
-                if (result == MessageBoxResult.Cancel) { this.Close(); return; }
-
-                var downloadList = new List<string>(ModelDownloader.CoreModels);
-                if (result == MessageBoxResult.Yes)
-                {
-                    downloadList.AddRange(ModelDownloader.QualityModels);
-                    downloadList.AddRange(ModelDownloader.VisionModels);
-                }
-
-                StatusText.Text = "DOWNLOADING AI ENGINES...";
-                ProcessingBar.Visibility = Visibility.Visible;
-                ProcessingBar.IsIndeterminate = false;
-                ProcessingBar.Value = 0;
-                ActionButton.IsEnabled = false;
-
-                try
-                {
-                    await ModelDownloader.DownloadModels(downloadList, (progress, msg) => {
-                        Dispatcher.Invoke(() => {
-                            ProcessingBar.Value = progress;
-                            StatusText.Text = msg.ToUpper();
-                        });
-                    });
-                    MessageBox.Show("Engines ready! Scarl is now functional.", "Setup Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Setup failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    this.Close();
-                }
-            }
-            UpdateUiState();
         }
 
         private void EnableBlur()
@@ -267,6 +221,108 @@ namespace Scarl.UI
 
         private void Settings_Click(object sender, RoutedEventArgs e) => SettingsOverlay.Visibility = Visibility.Visible;
         private void CloseSettings_Click(object sender, RoutedEventArgs e) => SettingsOverlay.Visibility = Visibility.Collapsed;
+
+        private void Models_Click(object sender, RoutedEventArgs e)
+        {
+            UpdateModelButtonsState();
+            ModelsOverlay.Visibility = Visibility.Visible;
+        }
+
+        private void CloseModels_Click(object sender, RoutedEventArgs e)
+        {
+            ModelsOverlay.Visibility = Visibility.Collapsed;
+        }
+
+        private void UpdateModelButtonsState()
+        {
+            string modelDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models");
+            
+            // Check RealESRGAN x4
+            bool esrgan4Exists = File.Exists(Path.Combine(modelDir, "realesrgan-x4.onnx"));
+            BtnDownloadEsrgan4.Content = esrgan4Exists ? "DOWNLOADED" : "DOWNLOAD";
+            BtnDownloadEsrgan4.IsEnabled = !esrgan4Exists;
+
+            // Check HAT x4
+            bool hatExists = File.Exists(Path.Combine(modelDir, "hat-x4.onnx"));
+            BtnDownloadHat.Content = hatExists ? "DOWNLOADED" : "DOWNLOAD";
+            BtnDownloadHat.IsEnabled = !hatExists;
+
+            // Check RealESRGAN x2
+            bool esrgan2Exists = File.Exists(Path.Combine(modelDir, "realesrgan-x2.onnx"));
+            BtnDownloadEsrgan2.Content = esrgan2Exists ? "DOWNLOADED" : "DOWNLOAD";
+            BtnDownloadEsrgan2.IsEnabled = !esrgan2Exists;
+
+            // Check RealESRGAN x8
+            bool esrgan8Exists = File.Exists(Path.Combine(modelDir, "realesrgan-x8.onnx"));
+            BtnDownloadEsrgan8.Content = esrgan8Exists ? "DOWNLOADED" : "DOWNLOAD";
+            BtnDownloadEsrgan8.IsEnabled = !esrgan8Exists;
+
+            // Check Vision
+            bool visionExists = ModelDownloader.ModelsExist(ModelDownloader.VisionModels);
+            BtnDownloadVision.Content = visionExists ? "DOWNLOADED" : "DOWNLOAD";
+            BtnDownloadVision.IsEnabled = !visionExists;
+        }
+
+        private async void DownloadEsrgan4_Click(object sender, RoutedEventArgs e)
+        {
+            await RunOverlayDownload(new[] { "realesrgan-x4.onnx", "RealESRGAN_x4.onnx" });
+        }
+
+        private async void DownloadHat_Click(object sender, RoutedEventArgs e)
+        {
+            await RunOverlayDownload(new[] { "hat-x4.onnx" });
+        }
+
+        private async void DownloadEsrgan2_Click(object sender, RoutedEventArgs e)
+        {
+            await RunOverlayDownload(new[] { "realesrgan-x2.onnx", "RealESRGAN_x2_fp16.onnx" });
+        }
+
+        private async void DownloadEsrgan8_Click(object sender, RoutedEventArgs e)
+        {
+            await RunOverlayDownload(new[] { "realesrgan-x8.onnx", "RealESRGAN_x8_fp16.onnx" });
+        }
+
+        private async void DownloadVision_Click(object sender, RoutedEventArgs e)
+        {
+            await RunOverlayDownload(ModelDownloader.VisionModels);
+        }
+
+        private async Task RunOverlayDownload(string[] files)
+        {
+            ModelProgress.Visibility = Visibility.Visible;
+            ModelStatusText.Visibility = Visibility.Visible;
+            ModelProgress.Value = 0;
+            ModelStatusText.Text = "Starting download...";
+
+            // Disable all download buttons during download
+            BtnDownloadEsrgan4.IsEnabled = false;
+            BtnDownloadHat.IsEnabled = false;
+            BtnDownloadEsrgan2.IsEnabled = false;
+            BtnDownloadEsrgan8.IsEnabled = false;
+            BtnDownloadVision.IsEnabled = false;
+
+            try
+            {
+                await ModelDownloader.DownloadModels(files, (progress, msg) => {
+                    Dispatcher.Invoke(() => {
+                        ModelProgress.Value = progress;
+                        ModelStatusText.Text = msg.ToUpper();
+                    });
+                });
+                MessageBox.Show("Model downloaded successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Download failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                ModelProgress.Visibility = Visibility.Collapsed;
+                ModelStatusText.Visibility = Visibility.Collapsed;
+                UpdateModelButtonsState();
+            }
+        }
 
         private void GlassSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
@@ -415,6 +471,20 @@ namespace Scarl.UI
                 string output = _outputPath;
 
                 string modelName = ModelSelector.SelectedIndex == 1 ? "models/hat-x4.onnx" : "models/realesrgan-x4.onnx";
+                string fullModelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, modelName);
+                if (!File.Exists(fullModelPath))
+                {
+                    MessageBox.Show(
+                        $"The selected model ({Path.GetFileName(modelName)}) is not downloaded yet.\n\nPlease open the AI Model Manager (click the 🧠 icon in the title bar) to download it.",
+                        "Model Missing",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning
+                    );
+                    _currentState = AppState.ReadyToUpscale;
+                    UpdateUiState();
+                    return;
+                }
+
                 int presetMode = PresetSelector.SelectedIndex; // 0=Default, 1=Sticker, 2=GIF
                 
                 // If GIF mode is selected, ensure output has .gif extension

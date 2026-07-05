@@ -92,18 +92,125 @@
                     <TextBlock x:Name="TitleBarText" Text="SCARL" Foreground="#AAA" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button WindowChrome.IsHitTestVisibleInChrome="True" Style="{StaticResource TitleBarButton}" Content="⚙" Click="Settings_Click"/>
+                    <Button WindowChrome.IsHitTestVisibleInChrome="True" Style="{StaticResource TitleBarButton}" Content="🧠" Click="Models_Click" ToolTip="AI Model Manager"/>
+                    <Button WindowChrome.IsHitTestVisibleInChrome="True" Style="{StaticResource TitleBarButton}" Content="⚙" Click="Settings_Click" ToolTip="Settings"/>
                     <Button WindowChrome.IsHitTestVisibleInChrome="True" Style="{StaticResource TitleBarButton}" Content="✕" Click="Close_Click"/>
                 </StackPanel>
-                </Grid>
+            </Grid>
 
-                <Grid Grid.Row="1" Margin="40">
+            <Grid Grid.Row="1" Margin="40">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="400"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-<!-- Settings Overlay -->
-<Border x:Name="SettingsOverlay" Grid.ColumnSpan="2" Background="#88000000" CornerRadius="8" Canvas.ZIndex="100" Visibility="Collapsed" Margin="-20">
+
+                <!-- Models Overlay -->
+                <Border x:Name="ModelsOverlay" Grid.ColumnSpan="2" Background="#88000000" CornerRadius="8" Canvas.ZIndex="100" Visibility="Collapsed" Margin="-20">
+                    <Border Background="#AA181818" CornerRadius="8" VerticalAlignment="Center" HorizontalAlignment="Center" Width="600" Padding="30" BorderBrush="#33FFFFFF" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="AI MODEL MANAGEMENT" Foreground="White" FontSize="24" FontWeight="Black" Margin="0,0,0,20"/>
+                            
+                            <ScrollViewer Height="400" VerticalScrollBarVisibility="Auto" Margin="0,0,0,20">
+                                <StackPanel>
+                                    <!-- RealESRGAN x4 -->
+                                    <Border Background="#222" CornerRadius="6" Padding="15" Margin="0,0,0,10" BorderBrush="#333" BorderThickness="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Real-ESRGAN x4 (FP32)" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                                                <TextBlock Text="Capability: Fast, general-purpose upscaling. Excellent for photos and basic illustrations." Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,5,15,5"/>
+                                                <TextBlock Text="Format: FP32 · Size: 71MB · GPU VRAM: Low (~1GB)" Foreground="#FF2400" FontSize="11" FontWeight="Bold"/>
+                                            </StackPanel>
+                                            <Button x:Name="BtnDownloadEsrgan4" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Style="{StaticResource GlowButton}" Click="DownloadEsrgan4_Click"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- HAT x4 -->
+                                    <Border Background="#222" CornerRadius="6" Padding="15" Margin="0,0,0,10" BorderBrush="#333" BorderThickness="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="HAT x4 / UltraSharp (FP32)" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                                                <TextBlock Text="Capability: Maximum reconstruction quality. UltraSharp detail enhancement, preserves fine textures." Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,5,15,5"/>
+                                                <TextBlock Text="Format: FP32 · Size: 67MB · GPU VRAM: Moderate (~2GB)" Foreground="#FF2400" FontSize="11" FontWeight="Bold"/>
+                                            </StackPanel>
+                                            <Button x:Name="BtnDownloadHat" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Style="{StaticResource GlowButton}" Click="DownloadHat_Click"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- RealESRGAN x2 FP16 -->
+                                    <Border Background="#222" CornerRadius="6" Padding="15" Margin="0,0,0,10" BorderBrush="#333" BorderThickness="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Real-ESRGAN x2 (FP16)" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                                                <TextBlock Text="Capability: Ultra-fast 2x upscaling. Low precision float formats for minimal VRAM impact." Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,5,15,5"/>
+                                                <TextBlock Text="Format: FP16 · Size: 36MB · GPU VRAM: Very Low (&lt;500MB)" Foreground="#FF2400" FontSize="11" FontWeight="Bold"/>
+                                            </StackPanel>
+                                            <Button x:Name="BtnDownloadEsrgan2" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Style="{StaticResource GlowButton}" Click="DownloadEsrgan2_Click"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- RealESRGAN x8 FP16 -->
+                                    <Border Background="#222" CornerRadius="6" Padding="15" Margin="0,0,0,10" BorderBrush="#333" BorderThickness="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Real-ESRGAN x8 (FP16)" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                                                <TextBlock Text="Capability: Massive 8x upscaling. Best for extreme detail expansion in fewer passes." Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,5,15,5"/>
+                                                <TextBlock Text="Format: FP16 · Size: 36MB · GPU VRAM: Low (~1GB)" Foreground="#FF2400" FontSize="11" FontWeight="Bold"/>
+                                            </StackPanel>
+                                            <Button x:Name="BtnDownloadEsrgan8" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Style="{StaticResource GlowButton}" Click="DownloadEsrgan8_Click"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Vision Models -->
+                                    <Border Background="#222" CornerRadius="6" Padding="15" Margin="0,0,0,10" BorderBrush="#333" BorderThickness="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Auto-Detection &amp; CLIP Analyzer" Foreground="White" FontSize="16" FontWeight="Bold"/>
+                                                <TextBlock Text="Capability: Enables smart heuristics (detects anime characters, tag labels, and auto-tunes preset modes)." Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,5,15,5"/>
+                                                <TextBlock Text="Components: CLIP Encoders + Classifier · Size: ~2.0GB" Foreground="#FF2400" FontSize="11" FontWeight="Bold"/>
+                                            </StackPanel>
+                                            <Button x:Name="BtnDownloadVision" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Style="{StaticResource GlowButton}" Click="DownloadVision_Click"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
+                                    <ProgressBar x:Name="ModelProgress" Height="8" Background="#111" Foreground="#FF2400" BorderThickness="0" Visibility="Collapsed" Margin="0,0,0,5"/>
+                                    <TextBlock x:Name="ModelStatusText" Text="" Foreground="#AAA" FontSize="11" Visibility="Collapsed"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="BACK TO APP" Style="{StaticResource GlowButton}" Click="CloseModels_Click"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </Border>
+
+                <!-- Settings Overlay -->
+                <Border x:Name="SettingsOverlay" Grid.ColumnSpan="2" Background="#88000000" CornerRadius="8" Canvas.ZIndex="100" Visibility="Collapsed" Margin="-20">
     <Border Background="#AA181818" CornerRadius="8" VerticalAlignment="Center" HorizontalAlignment="Center" Width="400" Padding="30" BorderBrush="#33FFFFFF" BorderThickness="1">
         <StackPanel>
             <TextBlock Text="SETTINGS" Foreground="White" FontSize="24" FontWeight="Black" Margin="0,0,0,20"/>
