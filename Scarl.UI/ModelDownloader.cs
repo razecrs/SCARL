@@ -55,7 +55,7 @@ namespace Scarl.UI
             return true;
         }
 
-        public static async Task DownloadModels(IEnumerable<string> fileList, Action<double, string> progressCallback)
+        public static async Task DownloadModels(IEnumerable<string> fileList, Action<double, string> progressCallback, System.Threading.CancellationToken cancellationToken = default)
         {
             string modelDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models");
             if (!Directory.Exists(modelDir)) Directory.CreateDirectory(modelDir);
@@ -66,27 +66,29 @@ namespace Scarl.UI
             var files = new List<string>(fileList);
             for (int i = 0; i < files.Count; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 string fileName = files[i];
                 string filePath = Path.Combine(modelDir, fileName);
                 if (File.Exists(filePath)) continue;
 
+                string tempFilePath = filePath + ".tmp";
                 string url = ModelUrls.TryGetValue(fileName, out var matchedUrl) ? matchedUrl : (ModelBaseUrl + fileName);
                 
                 try
                 {
-                    using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+                    using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
                     response.EnsureSuccessStatusCode();
 
                     var totalBytes = response.Content.Headers.ContentLength;
-                    using var stream = await response.Content.ReadAsStreamAsync();
-                    using var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                    using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                    using var fs = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
 
                     var buffer = new byte[81920];
                     long totalRead = 0;
                     int read;
-                    while ((read = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
                     {
-                        await fs.WriteAsync(buffer, 0, read);
+                        await fs.WriteAsync(buffer, 0, read, cancellationToken);
                         totalRead += read;
                         if (totalBytes.HasValue)
                         {
@@ -99,14 +101,22 @@ namespace Scarl.UI
                             progressCallback((double)i / files.Count * 100, $"Downloading {fileName}...");
                         }
                     }
+
+                    fs.Close();
+                    
+                    if (File.Exists(filePath))
+                    {
+                        File.Delete(filePath);
+                    }
+                    File.Move(tempFilePath, filePath);
                 }
                 catch (Exception ex)
                 {
-                    if (File.Exists(filePath))
+                    if (File.Exists(tempFilePath))
                     {
-                        try { File.Delete(filePath); } catch { }
+                        try { File.Delete(tempFilePath); } catch { }
                     }
-                    throw new Exception($"Failed to download {fileName}: {ex.Message}");
+                    throw new Exception($"Failed to download {fileName}: {ex.Message}", ex);
                 }
             }
             progressCallback(100, "Setup ready!");

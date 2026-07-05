@@ -30,6 +30,7 @@ namespace Scarl.UI
 
         // Cached text embeddings: name → normalised vector
         private readonly Dictionary<string, float[]> _textCache = new();
+        private readonly object _textCacheLock = new();
 
         private readonly string _visionInputName;
         private readonly string _textInputIdsName;
@@ -99,7 +100,10 @@ namespace Scarl.UI
         // ── Text encoding (with cache) ────────────────────────────────────────
         public float[] EncodeText(string text)
         {
-            if (_textCache.TryGetValue(text, out var cached)) return cached;
+            lock (_textCacheLock)
+            {
+                if (_textCache.TryGetValue(text, out var cached)) return cached;
+            }
 
             long[] ids  = _tokenizer.Encode(text);
             long[] mask = ids.Select(t => t != 0 ? 1L : 0L).ToArray();
@@ -113,9 +117,16 @@ namespace Scarl.UI
                 NamedOnnxValue.CreateFromTensor(_textAttnMaskName,  maskTensor)
             };
 
-            using var res = _textSess.Run(inputs);
-            var emb = Normalise(PickEmbedding(res));
-            _textCache[text] = emb;
+            float[] emb;
+            using (var res = _textSess.Run(inputs))
+            {
+                emb = Normalise(PickEmbedding(res));
+            }
+
+            lock (_textCacheLock)
+            {
+                _textCache[text] = emb;
+            }
             return emb;
         }
 

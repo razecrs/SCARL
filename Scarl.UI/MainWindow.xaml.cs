@@ -62,6 +62,7 @@ namespace Scarl.UI
         private string? _selectedImagePath;
         private string? _outputPath;
         private AppSettings _settings;
+        private System.Threading.CancellationTokenSource? _downloadCts;
 
         public MainWindow()
         {
@@ -160,14 +161,16 @@ namespace Scarl.UI
                     HelpText.Text = "ADJUST SETTINGS AND START RECONSTRUCTION";
                     PlaceholderText.Visibility = Visibility.Collapsed;
                     ProcessingBar.Visibility = Visibility.Collapsed;
-                    if (!string.IsNullOrEmpty(_selectedImagePath))
+                    if (!string.IsNullOrEmpty(_selectedImagePath) && File.Exists(_selectedImagePath))
                     {
-                        var bitmap = new BitmapImage();
-                        bitmap.BeginInit();
-                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                        bitmap.UriSource = new Uri(_selectedImagePath);
-                        bitmap.EndInit();
-                        ImagePreview.Source = bitmap;
+                        try
+                        {
+                            ImagePreview.Source = LoadPreviewImage(_selectedImagePath, 1200);
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Failed to load preview image: {ex.Message}", "Preview Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        }
                     }
                     break;
 
@@ -199,13 +202,14 @@ namespace Scarl.UI
                     ProcessingBar.Visibility = Visibility.Collapsed;
                     if (!string.IsNullOrEmpty(_outputPath) && File.Exists(_outputPath))
                     {
-                        var bitmap = new BitmapImage();
-                        bitmap.BeginInit();
-                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                        bitmap.UriSource = new Uri(_outputPath);
-                        bitmap.DecodePixelWidth = 1200; // Limit preview resolution for 40K stability
-                        bitmap.EndInit();
-                        ImagePreview.Source = bitmap;
+                        try
+                        {
+                            ImagePreview.Source = LoadPreviewImage(_outputPath, 1200);
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Failed to load result preview: {ex.Message}", "Preview Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        }
                     }
                     break;
             }
@@ -230,6 +234,7 @@ namespace Scarl.UI
 
         private void CloseModels_Click(object sender, RoutedEventArgs e)
         {
+            _downloadCts?.Cancel();
             ModelsOverlay.Visibility = Visibility.Collapsed;
         }
 
@@ -290,6 +295,10 @@ namespace Scarl.UI
 
         private async Task RunOverlayDownload(string[] files)
         {
+            _downloadCts?.Cancel();
+            _downloadCts = new System.Threading.CancellationTokenSource();
+            var cts = _downloadCts;
+
             ModelProgress.Visibility = Visibility.Visible;
             ModelStatusText.Visibility = Visibility.Visible;
             ModelProgress.Value = 0;
@@ -309,8 +318,12 @@ namespace Scarl.UI
                         ModelProgress.Value = progress;
                         ModelStatusText.Text = msg.ToUpper();
                     });
-                });
+                }, cts.Token);
                 MessageBox.Show("Model downloaded successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (OperationCanceledException)
+            {
+                MessageBox.Show("Download cancelled.", "Cancelled", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             catch (Exception ex)
             {
@@ -318,10 +331,33 @@ namespace Scarl.UI
             }
             finally
             {
+                if (_downloadCts == cts)
+                {
+                    _downloadCts = null;
+                }
+                cts.Dispose();
                 ModelProgress.Visibility = Visibility.Collapsed;
                 ModelStatusText.Visibility = Visibility.Collapsed;
                 UpdateModelButtonsState();
             }
+        }
+
+        private static BitmapImage LoadPreviewImage(string filePath, int decodeWidth)
+        {
+            var bitmap = new BitmapImage();
+            using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.StreamSource = stream;
+                if (decodeWidth > 0)
+                {
+                    bitmap.DecodePixelWidth = decodeWidth;
+                }
+                bitmap.EndInit();
+            }
+            bitmap.Freeze();
+            return bitmap;
         }
 
         private void GlassSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
