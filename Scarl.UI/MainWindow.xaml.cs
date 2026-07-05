@@ -451,6 +451,14 @@ namespace Scarl.UI
 
                 if (success)
                 {
+                    if (!File.Exists(_outputPath))
+                    {
+                        string jpgPath = Path.ChangeExtension(_outputPath, ".jpg");
+                        if (File.Exists(jpgPath))
+                        {
+                            _outputPath = jpgPath;
+                        }
+                    }
                     _currentState = AppState.Completed;
                 }
                 else

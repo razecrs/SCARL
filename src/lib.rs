@@ -185,6 +185,45 @@ fn process_upscale_inner(
         }
     } else {
         final_img.save(output_path)?;
+        
+        let max_file_size = 10 * 1024 * 1024; // 10 MB
+        if let Ok(metadata) = std::fs::metadata(output_path) {
+            if metadata.len() > max_file_size {
+                let jpeg_path = std::path::Path::new(output_path).with_extension("jpg");
+                if jpeg_path != std::path::Path::new(output_path) {
+                    let mut quality = 90;
+                    loop {
+                        let file = std::fs::File::create(&jpeg_path)?;
+                        let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, quality);
+                        if encoder.encode_image(&final_img).is_ok() {
+                            if let Ok(meta) = std::fs::metadata(&jpeg_path) {
+                                if meta.len() <= max_file_size || quality <= 50 {
+                                    // Delete the original oversized file and keep the jpeg
+                                    let _ = std::fs::remove_file(output_path);
+                                    break;
+                                }
+                            }
+                        }
+                        quality -= 5;
+                    }
+                } else {
+                    // It is already a jpeg, so just adjust quality of the existing file in place
+                    let mut quality = 85;
+                    loop {
+                        let file = std::fs::File::create(output_path)?;
+                        let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, quality);
+                        if encoder.encode_image(&final_img).is_ok() {
+                            if let Ok(meta) = std::fs::metadata(output_path) {
+                                if meta.len() <= max_file_size || quality <= 50 {
+                                    break;
+                                }
+                            }
+                        }
+                        quality -= 5;
+                    }
+                }
+            }
+        }
     }
     
     Ok(())
@@ -327,11 +366,22 @@ mod tests {
             
             assert!(result.is_ok(), "Upscaling failed for {}", name);
             
-            // Verify output dimensions
-            let out_img = image::open(&output_path).expect("Failed to open output image");
+            // Verify output dimensions and size limit
+            let mut actual_path = output_path.clone();
+            if !std::path::Path::new(&actual_path).exists() {
+                let jpg_path = format!("R:\\thingy_{}.jpg", name);
+                if std::path::Path::new(&jpg_path).exists() {
+                    actual_path = jpg_path;
+                }
+            }
+            
+            let metadata = std::fs::metadata(&actual_path).expect("Failed to read metadata");
+            assert!(metadata.len() <= 10 * 1024 * 1024, "File size for {} ({} bytes) exceeds 10MB limit!", name, metadata.len());
+            
+            let out_img = image::open(&actual_path).expect("Failed to open output image");
             assert_eq!(out_img.width(), res, "Width mismatch for {}", name);
             assert_eq!(out_img.height(), res, "Height mismatch for {}", name);
-            println!("Success: generated {} at exactly {}x{}", name, out_img.width(), out_img.height());
+            println!("Success: generated {} at exactly {}x{} (size: {} bytes)", name, out_img.width(), out_img.height(), metadata.len());
         }
     }
 }
