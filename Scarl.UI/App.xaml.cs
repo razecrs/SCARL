@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Windows;
@@ -58,11 +59,27 @@ namespace Scarl.UI
 
             if (string.IsNullOrEmpty(input))
             {
-                Console.WriteLine("\n[SCARL Error] Input file path is required. Use -i or --input.");
+                Console.WriteLine("\n[SCARL Error] Input path is required. Use -i or --input.");
                 Shutdown(1);
                 return;
             }
 
+            string fullModelPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, model));
+            if (!System.IO.File.Exists(fullModelPath))
+            {
+                Console.WriteLine($"\n[SCARL Error] Model file not found at: {fullModelPath}");
+                Shutdown(1);
+                return;
+            }
+
+            // Check if input is a directory (Batch Mode)
+            if (System.IO.Directory.Exists(input))
+            {
+                RunDirectoryBatch(input, output, fullModelPath, width, height, vibrancy, sharpness, depixelate, preset);
+                return;
+            }
+
+            // Otherwise, run in Single Image mode
             if (!System.IO.File.Exists(input))
             {
                 Console.WriteLine($"\n[SCARL Error] Input file not found: {input}");
@@ -76,14 +93,6 @@ namespace Scarl.UI
                 string name = System.IO.Path.GetFileNameWithoutExtension(input);
                 string ext = System.IO.Path.GetExtension(input);
                 output = System.IO.Path.Combine(dir, $"{name}_upscaled{ext}");
-            }
-
-            string fullModelPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, model));
-            if (!System.IO.File.Exists(fullModelPath))
-            {
-                Console.WriteLine($"\n[SCARL Error] Model file not found at: {fullModelPath}");
-                Shutdown(1);
-                return;
             }
 
             Console.WriteLine($"\nSCARL CLI - Execution Triggered:");
@@ -104,6 +113,66 @@ namespace Scarl.UI
                 Console.WriteLine("\n[SCARL Error] Upscale run failed.");
                 Shutdown(1);
             }
+        }
+
+        private void RunDirectoryBatch(string inputDir, string outputDir, string modelPath, int width, int height, float vibrancy, float sharpness, float depixelate, int preset)
+        {
+            Console.WriteLine($"\nSCARL CLI - Directory Batch Mode Triggered:");
+            Console.WriteLine($"  Input Directory:  {inputDir}");
+            Console.WriteLine($"  AI Model:         {modelPath}");
+            Console.WriteLine($"  Preset Mode:      {preset}");
+            Console.WriteLine($"  Dimensions:       {(width > 0 ? width.ToString() : "Auto")}x{(height > 0 ? height.ToString() : "Auto")}");
+
+            // Find all supported images
+            var exts = new[] { "*.png", "*.jpg", "*.jpeg" };
+            var files = new List<string>();
+            foreach (var ext in exts)
+            {
+                files.AddRange(System.IO.Directory.GetFiles(inputDir, ext, System.IO.SearchOption.TopDirectoryOnly));
+            }
+
+            if (files.Count == 0)
+            {
+                Console.WriteLine("\n[SCARL Error] No supported images (*.png, *.jpg, *.jpeg) found in the input directory.");
+                Shutdown(1);
+                return;
+            }
+
+            Console.WriteLine($"  Found {files.Count} images to upscale.");
+
+            // Resolve output directory
+            if (string.IsNullOrEmpty(outputDir))
+            {
+                outputDir = System.IO.Path.Combine(inputDir, "upscaled");
+            }
+            if (!System.IO.Directory.Exists(outputDir))
+            {
+                System.IO.Directory.CreateDirectory(outputDir);
+            }
+            Console.WriteLine($"  Output Directory: {outputDir}\n");
+
+            int successCount = 0;
+            for (int i = 0; i < files.Count; i++)
+            {
+                string file = files[i];
+                string name = System.IO.Path.GetFileName(file);
+                string outFile = System.IO.Path.Combine(outputDir, name);
+
+                Console.WriteLine($"[{i + 1}/{files.Count}] Upscaling {name}...");
+                bool ok = CoreEngine.RunUpscale(file, outFile, modelPath, width, height, vibrancy, sharpness, depixelate, preset);
+                if (ok)
+                {
+                    Console.WriteLine($"  -> Success: {outFile}");
+                    successCount++;
+                }
+                else
+                {
+                    Console.WriteLine($"  -> Failed to upscale {name}");
+                }
+            }
+
+            Console.WriteLine($"\n[SCARL Batch Done] Upscaled {successCount}/{files.Count} images successfully.");
+            Shutdown(successCount == files.Count ? 0 : 1);
         }
     }
 }
