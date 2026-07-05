@@ -36,9 +36,17 @@ pub fn array_to_image(array: Array4<f32>) -> DynamicImage {
     let mut img = ImageBuffer::new(width as u32, height as u32);
 
     for (x, y, pixel) in img.enumerate_pixels_mut() {
-        let r = (array[[0, 0, y as usize, x as usize]].clamp(0.0, 1.0) * 255.0) as u8;
-        let g = (array[[0, 1, y as usize, x as usize]].clamp(0.0, 1.0) * 255.0) as u8;
-        let b = (array[[0, 2, y as usize, x as usize]].clamp(0.0, 1.0) * 255.0) as u8;
+        let mut r_val = array[[0, 0, y as usize, x as usize]];
+        let mut g_val = array[[0, 1, y as usize, x as usize]];
+        let mut b_val = array[[0, 2, y as usize, x as usize]];
+        
+        if r_val.is_nan() { r_val = 0.0; }
+        if g_val.is_nan() { g_val = 0.0; }
+        if b_val.is_nan() { b_val = 0.0; }
+
+        let r = (r_val.clamp(0.0, 1.0) * 255.0) as u8;
+        let g = (g_val.clamp(0.0, 1.0) * 255.0) as u8;
+        let b = (b_val.clamp(0.0, 1.0) * 255.0) as u8;
         *pixel = Rgba([r, g, b, 255]);
     }
 

@@ -8,6 +8,8 @@ pub struct Tiler {
 
 impl Tiler {
     pub fn new(tile_size: u32, overlap: u32) -> Self {
+        let tile_size = if tile_size == 0 { 256 } else { tile_size };
+        let overlap = overlap.min(tile_size - 1);
         Self { tile_size, overlap }
     }
 

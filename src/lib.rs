@@ -20,15 +20,35 @@ pub extern "C" fn upscale_image(
     depixelate: f32,
     preset_mode: i32
 ) -> i32 {
-    let input = unsafe { CStr::from_ptr(input_path).to_string_lossy().into_owned() };
-    let output = unsafe { CStr::from_ptr(output_path).to_string_lossy().into_owned() };
-    let model = unsafe { CStr::from_ptr(model_name).to_string_lossy().into_owned() };
+    let result = std::panic::catch_unwind(|| {
+        if input_path.is_null() || output_path.is_null() || model_name.is_null() {
+            eprintln!("Error: Null pointer passed to upscale_image");
+            return -2;
+        }
 
-    match process_upscale(&input, &output, &model, target_width as u32, target_height as u32, vibrancy, sharpness, depixelate, preset_mode) {
-        Ok(_) => 0,
-        Err(e) => {
-            eprintln!("Error during upscale: {}", e);
-            -1
+        let input = unsafe { CStr::from_ptr(input_path).to_string_lossy().into_owned() };
+        let output = unsafe { CStr::from_ptr(output_path).to_string_lossy().into_owned() };
+        let model = unsafe { CStr::from_ptr(model_name).to_string_lossy().into_owned() };
+
+        if target_width <= 0 || target_height <= 0 {
+            eprintln!("Error: Target width and height must be positive, got {}x{}", target_width, target_height);
+            return -4;
+        }
+
+        match process_upscale(&input, &output, &model, target_width as u32, target_height as u32, vibrancy, sharpness, depixelate, preset_mode) {
+            Ok(_) => 0,
+            Err(e) => {
+                eprintln!("Error during upscale: {}", e);
+                -1
+            }
+        }
+    });
+
+    match result {
+        Ok(code) => code,
+        Err(_) => {
+            eprintln!("Rust panicked during upscale_image!");
+            -3
         }
     }
 }
@@ -94,6 +114,12 @@ fn process_upscale_inner(
             return Err(e.into());
         }
     };
+
+    let (img_w, img_h) = img.dimensions();
+    if img_w == 0 || img_h == 0 {
+        writeln!(log, "Image has 0 dimensions: {}x{}", img_w, img_h)?;
+        return Err(anyhow::anyhow!("Input image has zero dimensions: {}x{}", img_w, img_h));
+    }
 
     // Pre-processing: De-pixelate / Smoothing
     if depixelate > 0.0 {
@@ -180,6 +206,9 @@ fn process_upscale_inner(
             } else {
                 let n_w = (cur_img.width() as f32 * 0.9) as u32;
                 let n_h = (cur_img.height() as f32 * 0.9) as u32;
+                if n_w == 0 || n_h == 0 || (n_w == cur_img.width() && n_h == cur_img.height()) {
+                    break;
+                }
                 cur_img = cur_img.resize_exact(n_w, n_h, image::imageops::FilterType::CatmullRom);
             }
         }
@@ -191,10 +220,11 @@ fn process_upscale_inner(
             if metadata.len() > max_file_size {
                 let jpeg_path = std::path::Path::new(output_path).with_extension("jpg");
                 if jpeg_path != std::path::Path::new(output_path) {
-                    let mut quality = 90;
+                    let mut quality = 90u8;
                     loop {
                         let file = std::fs::File::create(&jpeg_path)?;
                         let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, quality);
+                        let mut success = false;
                         if encoder.encode_image(&final_img).is_ok() {
                             if let Ok(meta) = std::fs::metadata(&jpeg_path) {
                                 if meta.len() <= max_file_size || quality <= 50 {
@@ -202,22 +232,37 @@ fn process_upscale_inner(
                                     let _ = std::fs::remove_file(output_path);
                                     break;
                                 }
+                                success = true;
                             }
+                        }
+                        if !success && quality <= 50 {
+                            break;
+                        }
+                        if quality <= 5 {
+                            break;
                         }
                         quality -= 5;
                     }
                 } else {
                     // It is already a jpeg, so just adjust quality of the existing file in place
-                    let mut quality = 85;
+                    let mut quality = 85u8;
                     loop {
                         let file = std::fs::File::create(output_path)?;
                         let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(file, quality);
+                        let mut success = false;
                         if encoder.encode_image(&final_img).is_ok() {
                             if let Ok(meta) = std::fs::metadata(output_path) {
                                 if meta.len() <= max_file_size || quality <= 50 {
                                     break;
                                 }
+                                success = true;
                             }
+                        }
+                        if !success && quality <= 50 {
+                            break;
+                        }
+                        if quality <= 5 {
+                            break;
                         }
                         quality -= 5;
                     }
@@ -264,6 +309,12 @@ fn process_upscale_gif(
         let delay = frame.delay();
         let buffer = frame.into_buffer();
         let mut img = image::DynamicImage::ImageRgba8(buffer);
+        
+        let (img_w, img_h) = img.dimensions();
+        if img_w == 0 || img_h == 0 {
+            writeln!(log, "GIF Frame {} has 0 dimensions: {}x{}", i, img_w, img_h)?;
+            return Err(anyhow::anyhow!("GIF Frame {} has zero dimensions: {}x{}", i, img_w, img_h));
+        }
         
         if depixelate > 0.0 {
             let rgb_img = img.to_rgba8();
