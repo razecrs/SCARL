@@ -20,14 +20,12 @@ namespace Scarl.UI
             { "RealESRGAN_x2_fp16.onnx", "https://github.com/razecrs/SCARL/releases/download/v1.0.0/RealESRGAN_x2_fp16.onnx" },
             { "RealESRGAN_x8_fp16.onnx", "https://github.com/razecrs/SCARL/releases/download/v1.0.0/RealESRGAN_x8_fp16.onnx" },
             
-            // Vision Models
-            { "characters.txt", "https://github.com/razecrs/SCARL/releases/download/v1.0.0/characters.txt" },
-            { "classifier.onnx", "https://github.com/razecrs/SCARL/releases/download/v1.0.0/classifier.onnx" },
-            { "clip_merges.txt", "https://github.com/razecrs/SCARL/releases/download/v1.0.0/clip_merges.txt" },
-            { "clip_text.onnx", "https://github.com/razecrs/SCARL/releases/download/v1.0.0/clip_text.onnx" },
-            { "clip_vision.onnx", "https://github.com/razecrs/SCARL/releases/download/v1.0.0/clip_vision.onnx" },
-            { "clip_vocab.json", "https://github.com/razecrs/SCARL/releases/download/v1.0.0/clip_vocab.json" },
-            { "imagenet_labels.txt", "https://github.com/razecrs/SCARL/releases/download/v1.0.0/imagenet_labels.txt" }
+            // Vision Models from public Hugging Face sources
+            { "characters.txt", "https://huggingface.co/SmilingWolf/wd-v1-4-vit-tagger-v2/resolve/main/selected_tags.csv" },
+            { "clip_merges.txt", "https://huggingface.co/xplato/clip-vit-large-patch14-text-onnx/resolve/main/merges.txt" },
+            { "clip_text.onnx", "https://huggingface.co/xplato/clip-vit-large-patch14-text-onnx/resolve/main/model.onnx" },
+            { "clip_vision.onnx", "https://huggingface.co/xplato/clip-vit-large-patch14-vision-onnx/resolve/main/model.onnx" },
+            { "clip_vocab.json", "https://huggingface.co/xplato/clip-vit-large-patch14-text-onnx/resolve/main/vocab.json" }
         };
         
         public static readonly string[] CoreModels = {
@@ -40,8 +38,8 @@ namespace Scarl.UI
         };
 
         public static readonly string[] VisionModels = {
-            "characters.txt", "classifier.onnx", "clip_merges.txt", "clip_text.onnx",
-            "clip_vision.onnx", "clip_vocab.json", "imagenet_labels.txt"
+            "characters.txt", "clip_merges.txt", "clip_text.onnx",
+            "clip_vision.onnx", "clip_vocab.json"
         };
 
         public static bool ModelsExist(string[] fileList)
@@ -74,49 +72,105 @@ namespace Scarl.UI
                 string tempFilePath = filePath + ".tmp";
                 string url = ModelUrls.TryGetValue(fileName, out var matchedUrl) ? matchedUrl : (ModelBaseUrl + fileName);
                 
-                try
+                int maxRetries = 3;
+                int attempt = 0;
+                bool success = false;
+
+                while (attempt < maxRetries && !success)
                 {
-                    using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-                    response.EnsureSuccessStatusCode();
-
-                    var totalBytes = response.Content.Headers.ContentLength;
-                    using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-                    using var fs = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
-
-                    var buffer = new byte[81920];
-                    long totalRead = 0;
-                    int read;
-                    while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0)
+                    attempt++;
+                    try
                     {
-                        await fs.WriteAsync(buffer, 0, read, cancellationToken);
-                        totalRead += read;
-                        if (totalBytes.HasValue)
+                        using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                        response.EnsureSuccessStatusCode();
+
+                        var totalBytes = response.Content.Headers.ContentLength;
+                        using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                        using var fs = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
+
+                        var buffer = new byte[81920];
+                        long totalRead = 0;
+                        int read;
+                        double lastReportedFileProgress = -1;
+
+                        while (true)
                         {
-                            double fileProgress = (double)totalRead / totalBytes.Value * 100;
-                            double overallProgress = ((double)i / files.Count * 100) + (fileProgress / files.Count);
-                            progressCallback(overallProgress, $"Downloading {fileName} ({fileProgress:F1}%)");
+                            // Enforce a 30-second timeout for each read operation to prevent hung sockets
+                            using var readCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, readCts.Token);
+
+                            read = await stream.ReadAsync(buffer, 0, buffer.Length, linkedCts.Token);
+                            if (read <= 0) break;
+
+                            await fs.WriteAsync(buffer, 0, read, cancellationToken);
+                            totalRead += read;
+                            if (totalBytes.HasValue)
+                            {
+                                double fileProgress = (double)totalRead / totalBytes.Value * 100;
+                                if (fileProgress - lastReportedFileProgress >= 0.5 || fileProgress >= 100.0)
+                                {
+                                    lastReportedFileProgress = fileProgress;
+                                    double overallProgress = ((double)i / files.Count * 100) + (fileProgress / files.Count);
+                                    progressCallback(overallProgress, $"Downloading {fileName} ({fileProgress:F1}%)");
+                                }
+                            }
+                            else
+                            {
+                                progressCallback((double)i / files.Count * 100, $"Downloading {fileName}...");
+                            }
+                        }
+
+                        fs.Close();
+
+                        if (fileName == "characters.txt")
+                        {
+                            var csvLines = File.ReadAllLines(tempFilePath);
+                            var parsedChars = new List<string>();
+                            foreach (var line in csvLines)
+                            {
+                                if (string.IsNullOrWhiteSpace(line)) continue;
+                                var parts = line.Split(',');
+                                // Column indices: tag_id (0), name (1), category (2), count (3)
+                                // We filter for category '4' which contains Danbooru character tags
+                                if (parts.Length >= 3 && parts[2].Trim() == "4")
+                                {
+                                    parsedChars.Add(parts[1].Trim());
+                                }
+                            }
+
+                            if (File.Exists(filePath))
+                            {
+                                File.Delete(filePath);
+                            }
+                            File.WriteAllLines(filePath, parsedChars);
+                            File.Delete(tempFilePath);
                         }
                         else
                         {
-                            progressCallback((double)i / files.Count * 100, $"Downloading {fileName}...");
+                            if (File.Exists(filePath))
+                            {
+                                File.Delete(filePath);
+                            }
+                            File.Move(tempFilePath, filePath);
                         }
-                    }
 
-                    fs.Close();
-                    
-                    if (File.Exists(filePath))
-                    {
-                        File.Delete(filePath);
+                        success = true;
                     }
-                    File.Move(tempFilePath, filePath);
-                }
-                catch (Exception ex)
-                {
-                    if (File.Exists(tempFilePath))
+                    catch (Exception ex)
                     {
-                        try { File.Delete(tempFilePath); } catch { }
+                        if (File.Exists(tempFilePath))
+                        {
+                            try { File.Delete(tempFilePath); } catch { }
+                        }
+
+                        if (attempt >= maxRetries)
+                        {
+                            throw new Exception($"Failed to download {fileName} after {maxRetries} attempts. Last error: {ex.Message}", ex);
+                        }
+
+                        progressCallback((double)i / files.Count * 100, $"Download of {fileName} stalled. Retrying attempt {attempt + 1}/{maxRetries}...");
+                        await Task.Delay(2000, cancellationToken);
                     }
-                    throw new Exception($"Failed to download {fileName}: {ex.Message}", ex);
                 }
             }
             progressCallback(100, "Setup ready!");
