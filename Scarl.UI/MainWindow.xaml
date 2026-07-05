@@ -311,8 +311,10 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="AI MODEL" Foreground="#AAA" FontSize="14" VerticalAlignment="Center" Width="90"/>
                                 <ComboBox x:Name="ModelSelector" Grid.Column="1" Margin="10,0,0,0" SelectedIndex="0" Background="#222" Foreground="White" BorderBrush="#333">
-                                    <ComboBoxItem Content="Real-ESRGAN (Fast)"/>
-                                    <ComboBoxItem Content="HAT (Max Quality)"/>
+                                    <ComboBoxItem Content="Real-ESRGAN x4 (Fast)"/>
+                                    <ComboBoxItem Content="HAT x4 / UltraSharp"/>
+                                    <ComboBoxItem Content="Real-ESRGAN x2 (FP16)"/>
+                                    <ComboBoxItem Content="Real-ESRGAN x8 (FP16)"/>
                                 </ComboBox>
                             </Grid>
 

@@ -470,12 +470,28 @@ namespace Scarl.UI
                 string input = _selectedImagePath;
                 string output = _outputPath;
 
-                string modelName = ModelSelector.SelectedIndex == 1 ? "models/hat-x4.onnx" : "models/realesrgan-x4.onnx";
-                string fullModelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, modelName);
+                string relativeModelPath;
+                switch (ModelSelector.SelectedIndex)
+                {
+                    case 1:
+                        relativeModelPath = "models/hat-x4.onnx";
+                        break;
+                    case 2:
+                        relativeModelPath = "models/realesrgan-x2.onnx";
+                        break;
+                    case 3:
+                        relativeModelPath = "models/realesrgan-x8.onnx";
+                        break;
+                    default:
+                        relativeModelPath = "models/realesrgan-x4.onnx";
+                        break;
+                }
+
+                string fullModelPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, relativeModelPath));
                 if (!File.Exists(fullModelPath))
                 {
                     MessageBox.Show(
-                        $"The selected model ({Path.GetFileName(modelName)}) is not downloaded yet.\n\nPlease open the AI Model Manager (click the 🧠 icon in the title bar) to download it.",
+                        $"The selected model ({Path.GetFileName(relativeModelPath)}) is not downloaded yet.\n\nPlease open the AI Model Manager (click the 🧠 icon in the title bar) to download it.",
                         "Model Missing",
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning
@@ -517,7 +533,7 @@ namespace Scarl.UI
                     }
                 } catch {}
 
-                bool success = await Task.Run(() => CoreEngine.RunUpscale(input, output, modelName, targetW, targetH, vibrancy, sharpness, depixelate, presetMode));
+                bool success = await Task.Run(() => CoreEngine.RunUpscale(input, output, fullModelPath, targetW, targetH, vibrancy, sharpness, depixelate, presetMode));
 
                 if (success)
                 {
