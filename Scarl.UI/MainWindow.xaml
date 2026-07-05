@@ -92,9 +92,35 @@
                     <TextBlock x:Name="TitleBarText" Text="SCARL" Foreground="#AAA" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button WindowChrome.IsHitTestVisibleInChrome="True" Style="{StaticResource TitleBarButton}" Content="🧠" Click="Models_Click" ToolTip="AI Model Manager"/>
-                    <Button WindowChrome.IsHitTestVisibleInChrome="True" Style="{StaticResource TitleBarButton}" Content="⚙" Click="Settings_Click" ToolTip="Settings"/>
-                    <Button WindowChrome.IsHitTestVisibleInChrome="True" Style="{StaticResource TitleBarButton}" Content="✕" Click="Close_Click"/>
+                    <!-- AI Model Manager Button -->
+                    <Button WindowChrome.IsHitTestVisibleInChrome="True" Style="{StaticResource TitleBarButton}" Click="Models_Click" ToolTip="AI Model Manager">
+                        <Viewbox Width="14" Height="14">
+                            <Canvas Width="16" Height="16">
+                                <Line X1="4" Y1="12" X2="8" Y2="5" Stroke="#AAA" StrokeThickness="1.5"/>
+                                <Line X1="12" Y1="12" X2="8" Y2="5" Stroke="#AAA" StrokeThickness="1.5"/>
+                                <Line X1="4" Y1="12" X2="12" Y2="12" Stroke="#AAA" StrokeThickness="1.5"/>
+                                <Line X1="8" Y1="5" X2="8" Y2="2" Stroke="#AAA" StrokeThickness="1.5"/>
+                                <Ellipse Canvas.Left="2.5" Canvas.Top="10.5" Width="3" Height="3" Fill="#AAA"/>
+                                <Ellipse Canvas.Left="10.5" Canvas.Top="10.5" Width="3" Height="3" Fill="#AAA"/>
+                                <Ellipse Canvas.Left="6.5" Canvas.Top="3.5" Width="3" Height="3" Fill="#AAA"/>
+                                <Ellipse Canvas.Left="6.5" Canvas.Top="0.5" Width="3" Height="3" Fill="#FF2400"/>
+                            </Canvas>
+                        </Viewbox>
+                    </Button>
+                    
+                    <!-- Settings Button -->
+                    <Button WindowChrome.IsHitTestVisibleInChrome="True" Style="{StaticResource TitleBarButton}" Click="Settings_Click" ToolTip="Settings">
+                        <Viewbox Width="14" Height="14">
+                            <Path Data="M8,5.5 A2.5,2.5 0 1,0 8,10.5 A2.5,2.5 0 1,0 8,5.5 M8,1 L8,3 M8,13 L8,15 M1,8 L3,8 M13,8 L15,8 M3,3 L4.4,4.4 M11.6,11.6 L13,13 M13,3 L11.6,4.4 M4.4,11.6 L3,13" Stroke="#AAA" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Viewbox>
+                    </Button>
+                    
+                    <!-- Close Button -->
+                    <Button WindowChrome.IsHitTestVisibleInChrome="True" Style="{StaticResource TitleBarButton}" Click="Close_Click">
+                        <Viewbox Width="10" Height="10">
+                            <Path Data="M0,0 L10,10 M10,0 L0,10" Stroke="#AAA" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Viewbox>
+                    </Button>
                 </StackPanel>
             </Grid>
 

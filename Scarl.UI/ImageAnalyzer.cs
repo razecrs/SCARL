@@ -146,7 +146,7 @@ namespace Scarl.UI
                     {
                         var top3 = topClasses.Take(3)
                             .Select(c => $"{c.Label} ({c.Confidence:P0})");
-                        characterInfo = "🤖 AI: " + string.Join(" · ", top3);
+                        characterInfo = "AI: " + string.Join(" · ", top3);
                     }
                     else
                     {
