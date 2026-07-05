@@ -1,37 +1,38 @@
 using System;
 using System.Collections.Generic;
-using System.Configuration;
-using System.Data;
-using System.Windows;
+using System.IO;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Markup.Xaml;
 
 namespace Scarl.UI
 {
-    /// <summary>
-    /// Interaction logic for App.xaml
-    /// </summary>
     public partial class App : Application
     {
+        public override void Initialize()
+        {
+            AvaloniaXamlLoader.Load(this);
+        }
+
+        public override void OnFrameworkInitializationCompleted()
+        {
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                desktop.MainWindow = new MainWindow();
+            }
+
+            base.OnFrameworkInitializationCompleted();
+        }
+
         [System.Runtime.InteropServices.DllImport("kernel32.dll")]
         private static extern bool AttachConsole(int dwProcessId);
 
-        protected override void OnStartup(StartupEventArgs e)
+        public static void RunCliDirect(string[] args)
         {
-            base.OnStartup(e);
-
-            if (e.Args.Length > 0)
+            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
             {
-                RunCli(e.Args);
+                AttachConsole(-1); // Attach to parent cmd/powershell process console
             }
-            else
-            {
-                var mainWindow = new MainWindow();
-                mainWindow.Show();
-            }
-        }
-
-        private void RunCli(string[] args)
-        {
-            AttachConsole(-1); // Attach to parent cmd/powershell process console
             Console.WriteLine(); // Ensure print aligns nicely
 
             string input = "";
@@ -60,39 +61,39 @@ namespace Scarl.UI
             if (string.IsNullOrEmpty(input))
             {
                 Console.WriteLine("\n[SCARL Error] Input path is required. Use -i or --input.");
-                Shutdown(1);
+                Environment.Exit(1);
                 return;
             }
 
-            string fullModelPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, model));
-            if (!System.IO.File.Exists(fullModelPath))
+            string fullModelPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, model));
+            if (!File.Exists(fullModelPath))
             {
                 Console.WriteLine($"\n[SCARL Error] Model file not found at: {fullModelPath}");
-                Shutdown(1);
+                Environment.Exit(1);
                 return;
             }
 
             // Check if input is a directory (Batch Mode)
-            if (System.IO.Directory.Exists(input))
+            if (Directory.Exists(input))
             {
                 RunDirectoryBatch(input, output, fullModelPath, width, height, vibrancy, sharpness, depixelate, preset);
                 return;
             }
 
             // Otherwise, run in Single Image mode
-            if (!System.IO.File.Exists(input))
+            if (!File.Exists(input))
             {
                 Console.WriteLine($"\n[SCARL Error] Input file not found: {input}");
-                Shutdown(1);
+                Environment.Exit(1);
                 return;
             }
 
             if (string.IsNullOrEmpty(output))
             {
-                string dir = System.IO.Path.GetDirectoryName(input) ?? "";
-                string name = System.IO.Path.GetFileNameWithoutExtension(input);
-                string ext = System.IO.Path.GetExtension(input);
-                output = System.IO.Path.Combine(dir, $"{name}_upscaled{ext}");
+                string dir = Path.GetDirectoryName(input) ?? "";
+                string name = Path.GetFileNameWithoutExtension(input);
+                string ext = Path.GetExtension(input);
+                output = Path.Combine(dir, $"{name}_upscaled{ext}");
             }
 
             Console.WriteLine($"\nSCARL CLI - Execution Triggered:");
@@ -106,16 +107,16 @@ namespace Scarl.UI
             if (success)
             {
                 Console.WriteLine("\n[SCARL Success] Image upscale completed!");
-                Shutdown(0);
+                Environment.Exit(0);
             }
             else
             {
                 Console.WriteLine("\n[SCARL Error] Upscale run failed.");
-                Shutdown(1);
+                Environment.Exit(1);
             }
         }
 
-        private void RunDirectoryBatch(string inputDir, string outputDir, string modelPath, int width, int height, float vibrancy, float sharpness, float depixelate, int preset)
+        private static void RunDirectoryBatch(string inputDir, string outputDir, string modelPath, int width, int height, float vibrancy, float sharpness, float depixelate, int preset)
         {
             Console.WriteLine($"\nSCARL CLI - Directory Batch Mode Triggered:");
             Console.WriteLine($"  Input Directory:  {inputDir}");
@@ -128,13 +129,13 @@ namespace Scarl.UI
             var files = new List<string>();
             foreach (var ext in exts)
             {
-                files.AddRange(System.IO.Directory.GetFiles(inputDir, ext, System.IO.SearchOption.TopDirectoryOnly));
+                files.AddRange(Directory.GetFiles(inputDir, ext, SearchOption.TopDirectoryOnly));
             }
 
             if (files.Count == 0)
             {
                 Console.WriteLine("\n[SCARL Error] No supported images (*.png, *.jpg, *.jpeg) found in the input directory.");
-                Shutdown(1);
+                Environment.Exit(1);
                 return;
             }
 
@@ -143,11 +144,11 @@ namespace Scarl.UI
             // Resolve output directory
             if (string.IsNullOrEmpty(outputDir))
             {
-                outputDir = System.IO.Path.Combine(inputDir, "upscaled");
+                outputDir = Path.Combine(inputDir, "upscaled");
             }
-            if (!System.IO.Directory.Exists(outputDir))
+            if (!Directory.Exists(outputDir))
             {
-                System.IO.Directory.CreateDirectory(outputDir);
+                Directory.CreateDirectory(outputDir);
             }
             Console.WriteLine($"  Output Directory: {outputDir}\n");
 
@@ -155,8 +156,8 @@ namespace Scarl.UI
             for (int i = 0; i < files.Count; i++)
             {
                 string file = files[i];
-                string name = System.IO.Path.GetFileName(file);
-                string outFile = System.IO.Path.Combine(outputDir, name);
+                string name = Path.GetFileName(file);
+                string outFile = Path.Combine(outputDir, name);
 
                 Console.WriteLine($"[{i + 1}/{files.Count}] Upscaling {name}...");
                 bool ok = CoreEngine.RunUpscale(file, outFile, modelPath, width, height, vibrancy, sharpness, depixelate, preset);
@@ -172,7 +173,7 @@ namespace Scarl.UI
             }
 
             Console.WriteLine($"\n[SCARL Batch Done] Upscaled {successCount}/{files.Count} images successfully.");
-            Shutdown(successCount == files.Count ? 0 : 1);
+            Environment.Exit(successCount == files.Count ? 0 : 1);
         }
     }
 }

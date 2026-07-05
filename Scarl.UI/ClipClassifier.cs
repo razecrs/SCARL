@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Windows.Media.Imaging;
+using Avalonia;
+using Avalonia.Media.Imaging;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
@@ -62,39 +63,45 @@ namespace Scarl.UI
         // ── Image encoding ────────────────────────────────────────────────────
         public float[] EncodeImage(string imagePath)
         {
-            BitmapSource src;
+            Bitmap original;
             using (var s = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                var dec = BitmapDecoder.Create(s, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-                src = dec.Frames[0];
+                original = new Bitmap(s);
             }
 
             // Resize to 224×224 (CLIP standard)
-            var scaled = new TransformedBitmap(src,
-                new System.Windows.Media.ScaleTransform(224.0 / src.PixelWidth, 224.0 / src.PixelHeight));
-            var rgb = new FormatConvertedBitmap(
-                scaled, System.Windows.Media.PixelFormats.Rgb24, null, 0);
-
-            int stride = 224 * 3;
-            byte[] px = new byte[224 * stride];
-            rgb.CopyPixels(px, stride, 0);
-
-            // Build NCHW float32 tensor with CLIP normalisation
-            var tensor = new DenseTensor<float>(new[] { 1, 3, 224, 224 });
-            for (int y = 0; y < 224; y++)
-            for (int x = 0; x < 224; x++)
+            using (var scaled = original.CreateScaledBitmap(new PixelSize(224, 224), BitmapInterpolationMode.HighQuality))
             {
-                int i = y * stride + x * 3;
-                tensor[0, 0, y, x] = (px[i]     / 255f - Mean[0]) / Std[0];
-                tensor[0, 1, y, x] = (px[i + 1] / 255f - Mean[1]) / Std[1];
-                tensor[0, 2, y, x] = (px[i + 2] / 255f - Mean[2]) / Std[2];
+                int stride = 224 * 4;
+                byte[] px = new byte[224 * stride];
+                var handle = System.Runtime.InteropServices.GCHandle.Alloc(px, System.Runtime.InteropServices.GCHandleType.Pinned);
+                try
+                {
+                    scaled.CopyPixels(new PixelRect(0, 0, 224, 224), handle.AddrOfPinnedObject(), px.Length, stride);
+                }
+                finally
+                {
+                    handle.Free();
+                }
+
+                // Build NCHW float32 tensor with CLIP normalisation
+                var tensor = new DenseTensor<float>(new[] { 1, 3, 224, 224 });
+                for (int y = 0; y < 224; y++)
+                for (int x = 0; x < 224; x++)
+                {
+                    int i = (y * 224 + x) * 4;
+                    // Bgra8888 format: [Blue, Green, Red, Alpha]
+                    tensor[0, 0, y, x] = (px[i + 2] / 255f - Mean[0]) / Std[0]; // Red
+                    tensor[0, 1, y, x] = (px[i + 1] / 255f - Mean[1]) / Std[1]; // Green
+                    tensor[0, 2, y, x] = (px[i]     / 255f - Mean[2]) / Std[2]; // Blue
+                }
+
+                var inputs = new List<NamedOnnxValue>
+                    { NamedOnnxValue.CreateFromTensor(_visionInputName, tensor) };
+
+                using var res = _visionSess.Run(inputs);
+                return Normalise(PickEmbedding(res));
             }
-
-            var inputs = new List<NamedOnnxValue>
-                { NamedOnnxValue.CreateFromTensor(_visionInputName, tensor) };
-
-            using var res = _visionSess.Run(inputs);
-            return Normalise(PickEmbedding(res));
         }
 
         // ── Text encoding (with cache) ────────────────────────────────────────

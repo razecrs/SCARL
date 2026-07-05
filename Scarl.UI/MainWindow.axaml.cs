@@ -1,55 +1,21 @@
 using System;
-using System.Windows;
-using Microsoft.Win32;
-using System.Threading.Tasks;
 using System.IO;
-using System.Windows.Input;
-using System.Windows.Media.Imaging;
-using System.Windows.Media;
-
-using System.Windows.Controls;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Runtime.InteropServices;
-using System.Windows.Interop;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform.Storage;
 
 namespace Scarl.UI
 {
     public partial class MainWindow : Window
     {
-        [DllImport("user32.dll")]
-        internal static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
-
-        [StructLayout(LayoutKind.Sequential)]
-        internal struct WindowCompositionAttributeData
-        {
-            public WindowCompositionAttribute Attribute;
-            public IntPtr Data;
-            public int SizeOfData;
-        }
-
-        internal enum WindowCompositionAttribute
-        {
-            WCA_ACCENT_POLICY = 19
-        }
-
-        internal enum AccentState
-        {
-            ACCENT_DISABLED = 0,
-            ACCENT_ENABLE_GRADIENT = 1,
-            ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
-            ACCENT_ENABLE_BLURBEHIND = 3,
-            ACCENT_ENABLE_ACRYLICBLURBEHIND = 4,
-            ACCENT_INVALID_STATE = 5
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        internal struct AccentPolicy
-        {
-            public AccentState AccentState;
-            public int AccentFlags;
-            public int GradientColor;
-            public int AnimationId;
-        }
-
         private enum AppState
         {
             Select,
@@ -63,6 +29,7 @@ namespace Scarl.UI
         private string? _outputPath;
         private AppSettings _settings;
         private System.Threading.CancellationTokenSource? _downloadCts;
+        private TaskCompletionSource<bool>? _dialogTcs;
 
         public MainWindow()
         {
@@ -81,32 +48,9 @@ namespace Scarl.UI
 
         private void EnableBlur()
         {
-            var windowHelper = new WindowInteropHelper(this);
-            
-            // ABGR format: Alpha Blue Green Red
-            // Higher intensity = lower alpha for the tint (more glassy)
-            uint alpha = (uint)(255 - (_settings.GlassIntensity / 100.0 * 225));
-            uint color = (alpha << 24) | 0x00111111; 
-
-            var accent = new AccentPolicy 
-            { 
-                AccentState = _settings.GlassIntensity > 0 ? AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND : AccentState.ACCENT_DISABLED,
-                GradientColor = (int)color
-            };
-
-            var accentStructSize = Marshal.SizeOf(accent);
-            var accentPtr = Marshal.AllocHGlobal(accentStructSize);
-            Marshal.StructureToPtr(accent, accentPtr, false);
-
-            var data = new WindowCompositionAttributeData
-            {
-                Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
-                SizeOfData = accentStructSize,
-                Data = accentPtr
-            };
-
-            SetWindowCompositionAttribute(windowHelper.Handle, ref data);
-            Marshal.FreeHGlobal(accentPtr);
+            this.TransparencyLevelHint = _settings.GlassIntensity > 0 
+                ? new[] { WindowTransparencyLevel.AcrylicBlur } 
+                : new[] { WindowTransparencyLevel.None };
         }
 
         private void ApplySettings()
@@ -136,31 +80,34 @@ namespace Scarl.UI
                 case AppState.Select:
                     ActionButton.Content = "SELECT IMAGE";
                     ActionButton.IsEnabled = true;
-                    ResetButton.Visibility = Visibility.Collapsed;
+                    ResetButton.IsVisible = false;
                     VibrancySlider.IsEnabled = true;
                     SharpnessSlider.IsEnabled = true;
                     DepixelateSlider.IsEnabled = true;
                     StatusText.Text = "READY";
-                    StatusText.Foreground = _settings.Theme == "Red" ? new SolidColorBrush(Color.FromRgb(0xFF, 0x24, 0x00)) : (SolidColorBrush)StatusText.Foreground;
+                    if (_settings.Theme == "Red")
+                    {
+                        StatusText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x24, 0x00));
+                    }
                     HelpText.Text = "READY TO ENHANCE";
-                    PlaceholderText.Visibility = Visibility.Visible;
+                    PlaceholderText.IsVisible = true;
                     ImagePreview.Source = null;
-                    ProcessingBar.Visibility = Visibility.Collapsed;
+                    ProcessingBar.IsVisible = false;
                     break;
 
                 case AppState.ReadyToUpscale:
                     ActionButton.Content = "START RECONSTRUCTION";
                     ActionButton.IsEnabled = true;
                     ResetButton.Content = "RESET";
-                    ResetButton.Visibility = Visibility.Visible;
+                    ResetButton.IsVisible = true;
                     VibrancySlider.IsEnabled = true;
                     SharpnessSlider.IsEnabled = true;
                     DepixelateSlider.IsEnabled = true;
                     StatusText.Text = "IMAGE LOADED";
-                    StatusText.Foreground = Brushes.White;
+                    StatusText.Foreground = new SolidColorBrush(Colors.White);
                     HelpText.Text = "ADJUST SETTINGS AND START RECONSTRUCTION";
-                    PlaceholderText.Visibility = Visibility.Collapsed;
-                    ProcessingBar.Visibility = Visibility.Collapsed;
+                    PlaceholderText.IsVisible = false;
+                    ProcessingBar.IsVisible = false;
                     if (!string.IsNullOrEmpty(_selectedImagePath) && File.Exists(_selectedImagePath))
                     {
                         try
@@ -169,21 +116,21 @@ namespace Scarl.UI
                         }
                         catch (Exception ex)
                         {
-                            MessageBox.Show($"Failed to load preview image: {ex.Message}", "Preview Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            _ = ShowDialogAsync("Preview Error", $"Failed to load preview image: {ex.Message}");
                         }
                     }
                     break;
 
                 case AppState.Upscaling:
                     ActionButton.IsEnabled = false;
-                    ResetButton.Visibility = Visibility.Collapsed;
+                    ResetButton.IsVisible = false;
                     VibrancySlider.IsEnabled = false;
                     SharpnessSlider.IsEnabled = false;
                     DepixelateSlider.IsEnabled = false;
                     StatusText.Text = "RECONSTRUCTING...";
                     StatusText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x24, 0x00));
                     HelpText.Text = "PROCESSING TILES ON DIRECTML GPU ENGINE...";
-                    ProcessingBar.Visibility = Visibility.Visible;
+                    ProcessingBar.IsVisible = true;
                     ProcessingBar.IsIndeterminate = true;
                     break;
 
@@ -191,15 +138,15 @@ namespace Scarl.UI
                     ActionButton.Content = "OPEN IN EXPLORER";
                     ActionButton.IsEnabled = true;
                     ResetButton.Content = "NEW IMAGE";
-                    ResetButton.Visibility = Visibility.Visible;
+                    ResetButton.IsVisible = true;
                     VibrancySlider.IsEnabled = true;
                     SharpnessSlider.IsEnabled = true;
                     DepixelateSlider.IsEnabled = true;
                     StatusText.Text = "RECONSTRUCTION COMPLETE";
-                    StatusText.Foreground = Brushes.LimeGreen;
+                    StatusText.Foreground = new SolidColorBrush(Colors.LimeGreen);
                     HelpText.Text = "IMAGE SUCCESSFULLY UPSCALED!";
-                    PlaceholderText.Visibility = Visibility.Collapsed;
-                    ProcessingBar.Visibility = Visibility.Collapsed;
+                    PlaceholderText.IsVisible = false;
+                    ProcessingBar.IsVisible = false;
                     if (!string.IsNullOrEmpty(_outputPath) && File.Exists(_outputPath))
                     {
                         try
@@ -208,7 +155,7 @@ namespace Scarl.UI
                         }
                         catch (Exception ex)
                         {
-                            MessageBox.Show($"Failed to load result preview: {ex.Message}", "Preview Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            _ = ShowDialogAsync("Preview Error", $"Failed to load result preview: {ex.Message}");
                         }
                     }
                     break;
@@ -217,25 +164,25 @@ namespace Scarl.UI
 
         protected override void OnClosed(EventArgs e)
         {
-            _settings.WindowWidth = this.ActualWidth;
-            _settings.WindowHeight = this.ActualHeight;
+            _settings.WindowWidth = this.Bounds.Width;
+            _settings.WindowHeight = this.Bounds.Height;
             _settings.Save();
             base.OnClosed(e);
         }
 
-        private void Settings_Click(object sender, RoutedEventArgs e) => SettingsOverlay.Visibility = Visibility.Visible;
-        private void CloseSettings_Click(object sender, RoutedEventArgs e) => SettingsOverlay.Visibility = Visibility.Collapsed;
+        private void Settings_Click(object sender, RoutedEventArgs e) => SettingsOverlay.IsVisible = true;
+        private void CloseSettings_Click(object sender, RoutedEventArgs e) => SettingsOverlay.IsVisible = false;
 
         private void Models_Click(object sender, RoutedEventArgs e)
         {
             UpdateModelButtonsState();
-            ModelsOverlay.Visibility = Visibility.Visible;
+            ModelsOverlay.IsVisible = true;
         }
 
         private void CloseModels_Click(object sender, RoutedEventArgs e)
         {
             _downloadCts?.Cancel();
-            ModelsOverlay.Visibility = Visibility.Collapsed;
+            ModelsOverlay.IsVisible = false;
         }
 
         private void UpdateModelButtonsState()
@@ -299,8 +246,8 @@ namespace Scarl.UI
             _downloadCts = new System.Threading.CancellationTokenSource();
             var cts = _downloadCts;
 
-            ModelProgress.Visibility = Visibility.Visible;
-            ModelStatusText.Visibility = Visibility.Visible;
+            ModelProgress.IsVisible = true;
+            ModelStatusText.IsVisible = true;
             ModelProgress.Value = 0;
             ModelStatusText.Text = "Starting download...";
 
@@ -314,20 +261,20 @@ namespace Scarl.UI
             try
             {
                 await ModelDownloader.DownloadModels(files, (progress, msg) => {
-                    Dispatcher.Invoke(() => {
+                    Avalonia.Threading.Dispatcher.UIThread.Invoke(() => {
                         ModelProgress.Value = progress;
                         ModelStatusText.Text = msg.ToUpper();
                     });
                 }, cts.Token);
-                MessageBox.Show("Model downloaded successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                await ShowDialogAsync("Success", "Model downloaded successfully!");
             }
             catch (OperationCanceledException)
             {
-                MessageBox.Show("Download cancelled.", "Cancelled", MessageBoxButton.OK, MessageBoxImage.Warning);
+                await ShowDialogAsync("Cancelled", "Download cancelled.");
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Download failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                await ShowDialogAsync("Error", $"Download failed: {ex.Message}");
             }
             finally
             {
@@ -336,31 +283,27 @@ namespace Scarl.UI
                     _downloadCts = null;
                 }
                 cts.Dispose();
-                ModelProgress.Visibility = Visibility.Collapsed;
-                ModelStatusText.Visibility = Visibility.Collapsed;
+                ModelProgress.IsVisible = false;
+                ModelStatusText.IsVisible = false;
                 UpdateModelButtonsState();
             }
         }
 
-        private static BitmapImage LoadPreviewImage(string filePath, int decodeWidth)
+        private static Bitmap LoadPreviewImage(string filePath, int decodeWidth)
         {
-            var bitmap = new BitmapImage();
             using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.StreamSource = stream;
-                if (decodeWidth > 0)
+                var original = new Bitmap(stream);
+                if (decodeWidth > 0 && original.PixelSize.Width > decodeWidth)
                 {
-                    bitmap.DecodePixelWidth = decodeWidth;
+                    int decodeHeight = (int)((double)original.PixelSize.Height / original.PixelSize.Width * decodeWidth);
+                    return original.CreateScaledBitmap(new PixelSize(decodeWidth, decodeHeight), BitmapInterpolationMode.LowQuality);
                 }
-                bitmap.EndInit();
+                return original;
             }
-            bitmap.Freeze();
-            return bitmap;
         }
 
-        private void GlassSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        private void GlassSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
         {
             if (_settings == null || GlassText == null) return;
             _settings.GlassIntensity = e.NewValue;
@@ -370,12 +313,20 @@ namespace Scarl.UI
             _settings.Save();
         }
 
-        private void BrowseFolder_Click(object sender, RoutedEventArgs e)
+        private async void BrowseFolder_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new OpenFolderDialog();
-            if (dialog.ShowDialog() == true)
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel == null) return;
+
+            var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
             {
-                _settings.DefaultSaveFolder = dialog.FolderName;
+                Title = "Select Default Save Folder",
+                AllowMultiple = false
+            });
+
+            if (folders != null && folders.Count > 0)
+            {
+                _settings.DefaultSaveFolder = folders[0].Path.LocalPath;
                 SaveFolderBox.Text = _settings.DefaultSaveFolder;
                 _settings.Save();
             }
@@ -420,16 +371,14 @@ namespace Scarl.UI
             {
                 MainWindowBorder.BorderBrush = brush;
                 
-                // WPF Layer Opacity: Higher intensity = Lower Opacity (More transparent)
                 if (_settings.GlassIntensity <= 0)
                 {
                     MainWindowBorder.Background = new SolidColorBrush(Color.FromRgb(0x11, 0x11, 0x11));
                 }
                 else
                 {
-                    // Map 0-100% intensity to 1.0 - 0.2 opacity (lower opacity = more glassy)
-                    double wpfOpacity = 1.0 - (_settings.GlassIntensity / 100.0 * 0.8); 
-                    MainWindowBorder.Background = new SolidColorBrush(Color.FromArgb((byte)(wpfOpacity * 255), 0x11, 0x11, 0x11));
+                    double opacity = 1.0 - (_settings.GlassIntensity / 100.0 * 0.8); 
+                    MainWindowBorder.Background = new SolidColorBrush(Color.FromArgb((byte)(opacity * 255), 0x11, 0x11, 0x11));
                 }
             }
 
@@ -437,53 +386,63 @@ namespace Scarl.UI
             if (TitleBarText != null) TitleBarText.Foreground = brush;
 
             if (ActionButton != null) ActionButton.Background = brush;
-            }
+        }
 
         private async void ActionButton_Click(object sender, RoutedEventArgs e)
         {
             if (_currentState == AppState.Select)
             {
-                OpenFileDialog openFileDialog = new OpenFileDialog
-                {
-                    Filter = "Image files (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|All files (*.*)|*.*"
-                };
+                var topLevel = TopLevel.GetTopLevel(this);
+                if (topLevel == null) return;
 
-                if (openFileDialog.ShowDialog() == true)
+                var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
                 {
-                    string selectedPath = openFileDialog.FileName;
+                    Title = "Select Image File",
+                    AllowMultiple = false,
+                    FileTypeFilter = new[]
+                    {
+                        new FilePickerFileType("Image files")
+                        {
+                            Patterns = new[] { "*.png", "*.jpg", "*.jpeg" }
+                        },
+                        FilePickerFileTypes.All
+                    }
+                });
+
+                if (files != null && files.Count > 0)
+                {
+                    string selectedPath = files[0].Path.LocalPath;
                     try
                     {
-                        using (var stream = new FileStream(selectedPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                        if (ImageHeaderHelper.TryGetDimensions(selectedPath, out int origW, out int origH))
                         {
-                            var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
-                            if (decoder.Frames.Count > 0)
+                            int finalWidth, finalHeight;
+                            if (UseCustomResolutionCheckbox.IsChecked == true)
                             {
-                                 var frame = decoder.Frames[0];
-                                 int finalWidth, finalHeight;
-                                 if (UseCustomResolutionCheckbox.IsChecked == true)
-                                 {
-                                     if (!int.TryParse(CustomWidthInput.Text, out finalWidth) || finalWidth <= 0) finalWidth = 2000;
-                                     if (!int.TryParse(CustomHeightInput.Text, out finalHeight) || finalHeight <= 0) finalHeight = 3000;
-                                 }
-                                 else
-                                 {
-                                     int targetScale = GetTargetScale(frame.PixelWidth, frame.PixelHeight);
-                                     finalWidth = frame.PixelWidth * targetScale;
-                                     finalHeight = frame.PixelHeight * targetScale;
-                                 }
-
-                                // Boundary check for extreme resolutions
-                                if (finalWidth > 50000 || finalHeight > 50000)
-                                {
-                                    MessageBox.Show(
-                                        $"The requested resolution of {finalWidth}x{finalHeight} exceeds the absolute safety ceiling (50,000 px).\n\nPlease choose a lower resolution target.",
-                                        "Ceiling Reached",
-                                        MessageBoxButton.OK,
-                                        MessageBoxImage.Warning
-                                    );
-                                    return;
-                                }
+                                if (!int.TryParse(CustomWidthInput.Text, out finalWidth) || finalWidth <= 0) finalWidth = 2000;
+                                if (!int.TryParse(CustomHeightInput.Text, out finalHeight) || finalHeight <= 0) finalHeight = 3000;
                             }
+                            else
+                            {
+                                int targetScale = GetTargetScale(origW, origH);
+                                finalWidth = origW * targetScale;
+                                finalHeight = origH * targetScale;
+                            }
+
+                            // Boundary check for extreme resolutions
+                            if (finalWidth > 50000 || finalHeight > 50000)
+                            {
+                                await ShowDialogAsync(
+                                    "Ceiling Reached",
+                                    $"The requested resolution of {finalWidth}x{finalHeight} exceeds the absolute safety ceiling (50,000 px).\n\nPlease choose a lower resolution target."
+                                );
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            await ShowDialogAsync("Error", "Unsupported image format or invalid image file.");
+                            return;
                         }
 
                         _selectedImagePath = selectedPath;
@@ -497,7 +456,7 @@ namespace Scarl.UI
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Failed to load image metadata: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        await ShowDialogAsync("Error", $"Failed to load image metadata: {ex.Message}");
                     }
                 }
             }
@@ -535,11 +494,9 @@ namespace Scarl.UI
                 string fullModelPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, relativeModelPath));
                 if (!File.Exists(fullModelPath))
                 {
-                    MessageBox.Show(
-                        $"The selected model ({Path.GetFileName(relativeModelPath)}) is not downloaded yet.\n\nPlease open the AI Model Manager (click the 🧠 icon in the title bar) to download it.",
+                    await ShowDialogAsync(
                         "Model Missing",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning
+                        $"The selected model ({Path.GetFileName(relativeModelPath)}) is not downloaded yet.\n\nPlease open the AI Model Manager (click the 🧠 icon in the title bar) to download it."
                     );
                     _currentState = AppState.ReadyToUpscale;
                     UpdateUiState();
@@ -561,27 +518,21 @@ namespace Scarl.UI
 
                 int targetW = 0, targetH = 0;
                 try {
-                    using (var stream = new FileStream(input, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    if (UseCustomResolutionCheckbox.IsChecked == true)
                     {
-                        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
-                        if (decoder.Frames.Count > 0)
+                        if (!int.TryParse(CustomWidthInput.Text, out targetW) || targetW <= 0) targetW = 2000;
+                        if (!int.TryParse(CustomHeightInput.Text, out targetH) || targetH <= 0) targetH = 3000;
+                    }
+                    else
+                    {
+                        if (ImageHeaderHelper.TryGetDimensions(input, out int origW, out int origH))
                         {
-                             if (UseCustomResolutionCheckbox.IsChecked == true)
-                             {
-                                 if (!int.TryParse(CustomWidthInput.Text, out targetW) || targetW <= 0) targetW = 2000;
-                                 if (!int.TryParse(CustomHeightInput.Text, out targetH) || targetH <= 0) targetH = 3000;
-                             }
-                             else
-                             {
-                                 int index = (int)Math.Round(MultiplierSlider.Value);
-                                 int targetRes = _resolutionSteps[index];
-                                 int origW = decoder.Frames[0].PixelWidth;
-                                 int origH = decoder.Frames[0].PixelHeight;
-                                 
-                                 float scale = (float)targetRes / Math.Max(origW, origH);
-                                 targetW = (int)(origW * scale);
-                                 targetH = (int)(origH * scale);
-                             }
+                            int index = (int)Math.Round(MultiplierSlider.Value);
+                            int targetRes = _resolutionSteps[index];
+                            
+                            float scale = (float)targetRes / Math.Max(origW, origH);
+                            targetW = (int)(origW * scale);
+                            targetH = (int)(origH * scale);
                         }
                     }
                 } catch {}
@@ -616,8 +567,8 @@ namespace Scarl.UI
                     UpdateUiState();
                     
                     StatusText.Text = "RECONSTRUCTION FAILED";
-                    StatusText.Foreground = Brushes.Red;
-                    MessageBox.Show($"Upscaling failed.\n\nDebug Log:\n{debugLog}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    StatusText.Foreground = new SolidColorBrush(Colors.Red);
+                    await ShowDialogAsync("Error", $"Upscaling failed.\n\nDebug Log:\n{debugLog}");
                 }
                 UpdateUiState();
             }
@@ -627,19 +578,35 @@ namespace Scarl.UI
                 {
                     try
                     {
-                        System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{_outputPath}\"");
+                        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+                        {
+                            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{_outputPath}\"");
+                        }
+                        else
+                        {
+                            // On Linux we can open the directory
+                            string? dir = Path.GetDirectoryName(_outputPath);
+                            if (dir != null)
+                            {
+                                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                                {
+                                    FileName = "xdg-open",
+                                    Arguments = $"\"{dir}\"",
+                                    UseShellExecute = true
+                                });
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Failed to open explorer: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        await ShowDialogAsync("Error", $"Failed to open directory: {ex.Message}");
                     }
                 }
             }
         }
 
-        private async System.Threading.Tasks.Task RunAutoDetectAsync(string imagePath)
+        private async Task RunAutoDetectAsync(string imagePath)
         {
-            // Show "ANALYZING" in status briefly
             StatusText.Text = "ANALYZING...";
             StatusText.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xA5, 0x00));
 
@@ -650,160 +617,33 @@ namespace Scarl.UI
             }
             catch
             {
-                // If analysis fails just silently restore status
                 StatusText.Text = "IMAGE LOADED";
-                StatusText.Foreground = Brushes.White;
+                StatusText.Foreground = new SolidColorBrush(Colors.White);
                 return;
             }
 
-            // Restore status
             StatusText.Text = "IMAGE LOADED";
-            StatusText.Foreground = Brushes.White;
+            StatusText.Foreground = new SolidColorBrush(Colors.White);
 
-            // Always show dialog: if pixel art detected, or if a face was found in a non-pixel image
             if (!result.IsPixelArt && !result.HasCharacter) return;
 
-            // Build a nice detection dialog
-            var dialog = new Window
-            {
-                Title = "Scarl — Image Analysis",
-                Width = 420,
-                Height = 260,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Owner = this,
-                WindowStyle = WindowStyle.None,
-                AllowsTransparency = true,
-                Background = System.Windows.Media.Brushes.Transparent,
-                ResizeMode = ResizeMode.NoResize
-            };
-
-            var border = new System.Windows.Controls.Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(0x18, 0x18, 0x18)),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x24, 0x00)),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new System.Windows.CornerRadius(10),
-                Padding = new Thickness(30)
-            };
-
-            var stack = new System.Windows.Controls.StackPanel { VerticalAlignment = VerticalAlignment.Center };
-
-            // Title changes based on what was detected
             string dialogTitle = result.IsPixelArt && result.HasCharacter
                 ? "⚠  PIXEL ART + CHARACTER DETECTED"
                 : result.IsPixelArt
                     ? "⚠  PIXEL ART DETECTED"
                     : "👤  CHARACTER DETECTED";
 
-            var icon = new System.Windows.Controls.TextBlock
-            {
-                Text = dialogTitle,
-                Foreground = result.IsPixelArt
-                    ? new SolidColorBrush(Color.FromRgb(0xFF, 0xA5, 0x00))
-                    : new SolidColorBrush(Color.FromRgb(0x7C, 0xD9, 0x7C)),
-                FontSize = 13,
-                FontWeight = FontWeights.Bold,
-                Margin = new Thickness(0, 0, 0, 10)
-            };
+            bool userChoice = await ShowDialogAsync(
+                dialogTitle,
+                result.Description,
+                $"Blockiness: {result.BlockinessScore:P0}  ·  Colours: {result.UniqueColors}  ·  Suggested DE-PIXELATE: {result.RecommendedDepixelate}",
+                !string.IsNullOrEmpty(result.CharacterInfo) ? (result.HasCharacter ? "👤  " : "○  ") + result.CharacterInfo : null,
+                isConfirm: true,
+                yesText: "YES — APPLY FIX",
+                noText: "NO — NORMAL"
+            );
 
-            var desc = new System.Windows.Controls.TextBlock
-            {
-                Text = result.Description,
-                Foreground = Brushes.White,
-                FontSize = 14,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 6)
-            };
-
-            var stats = new System.Windows.Controls.TextBlock
-            {
-                Text = $"Blockiness: {result.BlockinessScore:P0}  ·  Colours: {result.UniqueColors}  ·  Suggested DE-PIXELATE: {result.RecommendedDepixelate}",
-                Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
-                FontSize = 11,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 6)
-            };
-
-            var charInfo = new System.Windows.Controls.TextBlock
-            {
-                Text = !string.IsNullOrEmpty(result.CharacterInfo)
-                    ? (result.HasCharacter ? "👤  " : "○  ") + result.CharacterInfo
-                    : "",
-                Foreground = result.HasCharacter
-                    ? new SolidColorBrush(Color.FromRgb(0x7C, 0xD9, 0x7C))
-                    : new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
-                FontSize = 11,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 18)
-            };
-
-            var question = new System.Windows.Controls.TextBlock
-            {
-                Text = "Apply De-Pixelate enhancement for best results?",
-                Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
-                FontSize = 13,
-                Margin = new Thickness(0, 0, 0, 16)
-            };
-
-            var btnRow = new System.Windows.Controls.StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-
-            bool? userChoice = null;
-
-            var yesBtn = new System.Windows.Controls.Button
-            {
-                Content = "YES — APPLY FIX",
-                Width = 160,
-                Height = 38,
-                Margin = new Thickness(0, 0, 12, 0),
-                Background = new SolidColorBrush(Color.FromRgb(0xFF, 0x24, 0x00)),
-                Foreground = Brushes.White,
-                FontWeight = FontWeights.Bold,
-                FontSize = 12,
-                BorderThickness = new Thickness(0),
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-            yesBtn.Template = CreateRoundedButtonTemplate(new SolidColorBrush(Color.FromRgb(0xFF, 0x24, 0x00)));
-            yesBtn.Click += (s, e) => { userChoice = true; dialog.Close(); };
-
-            var noBtn = new System.Windows.Controls.Button
-            {
-                Content = "NO — NORMAL UPSCALE",
-                Width = 160,
-                Height = 38,
-                Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A)),
-                Foreground = new SolidColorBrush(Color.FromRgb(0xAA, 0xAA, 0xAA)),
-                FontWeight = FontWeights.Bold,
-                FontSize = 12,
-                BorderThickness = new Thickness(0),
-                Cursor = System.Windows.Input.Cursors.Hand
-            };
-            noBtn.Template = CreateRoundedButtonTemplate(new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A)));
-            noBtn.Click += (s, e) => { userChoice = false; dialog.Close(); };
-
-            btnRow.Children.Add(yesBtn);
-            btnRow.Children.Add(noBtn);
-
-            stack.Children.Add(icon);
-            stack.Children.Add(desc);
-            stack.Children.Add(stats);
-            if (!string.IsNullOrEmpty(result.CharacterInfo))
-                stack.Children.Add(charInfo);
-            stack.Children.Add(question);
-            stack.Children.Add(btnRow);
-
-            border.Child = stack;
-            dialog.Content = border;
-
-            // Allow drag
-            border.MouseLeftButtonDown += (s, e) => dialog.DragMove();
-
-            dialog.ShowDialog();
-
-            if (userChoice == true)
+            if (userChoice)
             {
                 DepixelateSlider.Value = result.RecommendedDepixelate;
                 HelpText.Text = $"DE-PIXELATE set to {result.RecommendedDepixelate} — ready to reconstruct!";
@@ -812,19 +652,69 @@ namespace Scarl.UI
             }
         }
 
-        private static System.Windows.Controls.ControlTemplate CreateRoundedButtonTemplate(SolidColorBrush bg)
+        private Task<bool> ShowDialogAsync(string title, string message, string? stats = null, string? charInfo = null, bool isConfirm = false, string yesText = "YES", string noText = "NO", string okText = "OK")
         {
-            var template = new System.Windows.Controls.ControlTemplate(typeof(System.Windows.Controls.Button));
-            var border = new FrameworkElementFactory(typeof(System.Windows.Controls.Border));
-            border.SetValue(System.Windows.Controls.Border.BackgroundProperty, bg);
-            border.SetValue(System.Windows.Controls.Border.CornerRadiusProperty, new System.Windows.CornerRadius(7));
-            border.SetValue(System.Windows.Controls.Border.PaddingProperty, new Thickness(12, 8, 12, 8));
-            var content = new FrameworkElementFactory(typeof(System.Windows.Controls.ContentPresenter));
-            content.SetValue(System.Windows.Controls.ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
-            content.SetValue(System.Windows.Controls.ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
-            border.AppendChild(content);
-            template.VisualTree = border;
-            return template;
+            _dialogTcs = new TaskCompletionSource<bool>();
+
+            DialogTitleText.Text = title.ToUpper();
+            DialogMessageText.Text = message;
+            
+            if (!string.IsNullOrEmpty(stats))
+            {
+                DialogStatsText.Text = stats;
+                DialogStatsText.IsVisible = true;
+            }
+            else
+            {
+                DialogStatsText.IsVisible = false;
+            }
+
+            if (!string.IsNullOrEmpty(charInfo))
+            {
+                DialogCharInfoText.Text = charInfo;
+                DialogCharInfoText.IsVisible = true;
+            }
+            else
+            {
+                DialogCharInfoText.IsVisible = false;
+            }
+
+            if (isConfirm)
+            {
+                BtnDialogYes.Content = yesText.ToUpper();
+                BtnDialogNo.Content = noText.ToUpper();
+                BtnDialogYes.IsVisible = true;
+                BtnDialogNo.IsVisible = true;
+                BtnDialogOk.IsVisible = false;
+            }
+            else
+            {
+                BtnDialogOk.Content = okText.ToUpper();
+                BtnDialogYes.IsVisible = false;
+                BtnDialogNo.IsVisible = false;
+                BtnDialogOk.IsVisible = true;
+            }
+
+            DialogOverlay.IsVisible = true;
+            return _dialogTcs.Task;
+        }
+
+        private void DialogOk_Click(object sender, RoutedEventArgs e)
+        {
+            DialogOverlay.IsVisible = false;
+            _dialogTcs?.TrySetResult(true);
+        }
+
+        private void DialogYes_Click(object sender, RoutedEventArgs e)
+        {
+            DialogOverlay.IsVisible = false;
+            _dialogTcs?.TrySetResult(true);
+        }
+
+        private void DialogNo_Click(object sender, RoutedEventArgs e)
+        {
+            DialogOverlay.IsVisible = false;
+            _dialogTcs?.TrySetResult(false);
         }
 
         private void ResetButton_Click(object sender, RoutedEventArgs e)
@@ -835,20 +725,17 @@ namespace Scarl.UI
             UpdateUiState();
         }
 
-        private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        private void TitleBar_PointerPressed(object sender, PointerPressedEventArgs e)
         {
-            if (e.LeftButton == MouseButtonState.Pressed)
-            {
-                this.DragMove();
-            }
+            this.BeginMoveDrag(e);
         }
 
-        private void DepixelateSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        private void DepixelateSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
         {
             // Future real-time preview logic
         }
 
-        private void PresetSelector_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        private void PresetSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (PresetSelector == null) return;
             
@@ -862,7 +749,7 @@ namespace Scarl.UI
 
         private readonly int[] _resolutionSteps = { 2000, 4000, 6000, 8000, 10000, 12000, 14000, 16000, 18000, 20000, 25000, 30000, 35000, 40000 };
 
-        private void MultiplierSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        private void MultiplierSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
         {
             if (MultiplierText != null && _resolutionSteps != null)
             {
@@ -880,11 +767,9 @@ namespace Scarl.UI
             int index = (int)Math.Round(MultiplierSlider.Value);
             int targetRes = _resolutionSteps[index];
             
-            // We scale based on the largest dimension to hit the "K" target
             int maxDim = Math.Max(originalWidth, originalHeight);
             float scale = (float)targetRes / maxDim;
             
-            // Minimum scale is 1
             return (int)Math.Max(1, Math.Ceiling(scale));
         }
 
@@ -892,14 +777,13 @@ namespace Scarl.UI
         {
             if (CustomResolutionPanel != null)
             {
-                CustomResolutionPanel.Visibility = UseCustomResolutionCheckbox.IsChecked == true
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
+                CustomResolutionPanel.IsVisible = UseCustomResolutionCheckbox.IsChecked == true;
             }
         }
 
-        private void NumberValidationTextBox(object sender, System.Windows.Input.TextCompositionEventArgs e)
+        private void NumberValidationTextBox(object sender, TextInputEventArgs e)
         {
+            if (e.Text == null) return;
             var regex = new System.Text.RegularExpressions.Regex("[^0-9]+");
             e.Handled = regex.IsMatch(e.Text);
         }

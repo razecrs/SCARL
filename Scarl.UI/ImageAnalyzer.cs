@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Windows.Media.Imaging;
+using Avalonia;
+using Avalonia.Media.Imaging;
 
 namespace Scarl.UI
 {
@@ -75,21 +76,27 @@ namespace Scarl.UI
         private static AnalysisResult Analyze(string imagePath)
         {
             // ── Load + downscale to 256px for heuristics ─────────────────────
-            BitmapSource src;
+            Bitmap original;
             using (var s = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                var dec = BitmapDecoder.Create(s, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-                src = dec.Frames[0];
+                original = new Bitmap(s);
             }
 
-            int w = Math.Min(src.PixelWidth, 256), h = Math.Min(src.PixelHeight, 256);
-            var scaled = new TransformedBitmap(src,
-                new System.Windows.Media.ScaleTransform((double)w/src.PixelWidth, (double)h/src.PixelHeight));
-            var bgr32 = new FormatConvertedBitmap(
-                scaled, System.Windows.Media.PixelFormats.Bgr32, null, 0);
+            int w = Math.Min(original.PixelSize.Width, 256), h = Math.Min(original.PixelSize.Height, 256);
+            byte[] px = new byte[h * w * 4];
             int stride = w * 4;
-            byte[] px = new byte[h * stride];
-            bgr32.CopyPixels(px, stride, 0);
+            using (var scaled = original.CreateScaledBitmap(new PixelSize(w, h), BitmapInterpolationMode.HighQuality))
+            {
+                var handle = System.Runtime.InteropServices.GCHandle.Alloc(px, System.Runtime.InteropServices.GCHandleType.Pinned);
+                try
+                {
+                    scaled.CopyPixels(new PixelRect(0, 0, w, h), handle.AddrOfPinnedObject(), px.Length, stride);
+                }
+                finally
+                {
+                    handle.Free();
+                }
+            }
 
             // ── Unique colour count ───────────────────────────────────────────
             var uColors = new System.Collections.Generic.HashSet<int>();

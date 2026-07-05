@@ -1,82 +1,75 @@
-<Window x:Class="Scarl.UI.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Scarl.UI.MainWindow"
         Title="Scarl" Height="800" Width="1100"
-        WindowStyle="None"
-        AllowsTransparency="True"
+        SystemDecorations="None"
+        TransparencyLevelHint="AcrylicBlur"
         Background="Transparent"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="CanResize">
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        CanResize="True">
 
-    <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="40" 
-                      ResizeBorderThickness="8" 
-                      GlassFrameThickness="0" 
-                      CornerRadius="12"/>
-    </WindowChrome.WindowChrome>
-    
-    <Window.Resources>
-        <Style x:Key="GlowButton" TargetType="Button">
+    <Window.Styles>
+        <Style Selector="Button.GlowButton">
             <Setter Property="Background" Value="#FF2400"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="20,10">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="20,10">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          HorizontalAlignment="Center" 
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
             </Setter>
         </Style>
 
-        <Style x:Key="TitleBarButton" TargetType="Button">
+        <Style Selector="Button.TitleBarButton">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#AAA"/>
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Width" Value="40"/>
             <Setter Property="Height" Value="30"/>
             <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          HorizontalAlignment="Center" 
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
             </Setter>
         </Style>
 
-        <Style x:Key="SecondaryButton" TargetType="Button">
+        <Style Selector="Button.SecondaryButton">
             <Setter Property="Background" Value="#222"/>
             <Setter Property="Foreground" Value="#AAA"/>
             <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="15,10">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="15,10">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          HorizontalAlignment="Center" 
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
             </Setter>
         </Style>
 
-        <Style TargetType="ComboBoxItem">
+        <Style Selector="ComboBoxItem">
             <Setter Property="Background" Value="#222"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="5,3"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#444"/>
-                </Trigger>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#FF2400"/>
-                    <Setter Property="Foreground" Value="White"/>
-                </Trigger>
-            </Style.Triggers>
         </Style>
-    </Window.Resources>
+        <Style Selector="ComboBoxItem:pointerover">
+            <Setter Property="Background" Value="#444"/>
+        </Style>
+        <Style Selector="ComboBoxItem:selected">
+            <Setter Property="Background" Value="#FF2400"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+    </Window.Styles>
 
     <Border x:Name="MainWindowBorder" Background="#33111111" CornerRadius="12" BorderBrush="#333" BorderThickness="1">
         <Grid>
@@ -86,20 +79,20 @@
             </Grid.RowDefinitions>
 
             <!-- Custom Title Bar -->
-            <Grid Grid.Row="0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" Background="#11000000">
+            <Grid Grid.Row="0" PointerPressed="TitleBar_PointerPressed" Background="#11000000">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0">
-                    <Image Source="pack://application:,,,/Assets/logo.png" Width="20" Height="20" Margin="0,0,10,0"/>
+                    <Image Source="avares://Scarl.UI/Assets/logo.png" Width="20" Height="20" Margin="0,0,10,0"/>
                     <TextBlock x:Name="TitleBarText" Text="SCARL" Foreground="#AAA" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <!-- AI Model Manager Button -->
-                    <Button WindowChrome.IsHitTestVisibleInChrome="True" Style="{StaticResource TitleBarButton}" Click="Models_Click" ToolTip="AI Model Manager">
+                    <Button Classes="TitleBarButton" Click="Models_Click" ToolTip.Tip="AI Model Manager">
                         <Viewbox Width="14" Height="14">
                             <Canvas Width="16" Height="16">
-                                <Line X1="4" Y1="12" X2="8" Y2="5" Stroke="#AAA" StrokeThickness="1.5"/>
-                                <Line X1="12" Y1="12" X2="8" Y2="5" Stroke="#AAA" StrokeThickness="1.5"/>
-                                <Line X1="4" Y1="12" X2="12" Y2="12" Stroke="#AAA" StrokeThickness="1.5"/>
-                                <Line X1="8" Y1="5" X2="8" Y2="2" Stroke="#AAA" StrokeThickness="1.5"/>
+                                <Line StartPoint="4,12" EndPoint="8,5" Stroke="#AAA" StrokeThickness="1.5"/>
+                                <Line StartPoint="12,12" EndPoint="8,5" Stroke="#AAA" StrokeThickness="1.5"/>
+                                <Line StartPoint="4,12" EndPoint="12,12" Stroke="#AAA" StrokeThickness="1.5"/>
+                                <Line StartPoint="8,5" EndPoint="8,2" Stroke="#AAA" StrokeThickness="1.5"/>
                                 <Ellipse Canvas.Left="2.5" Canvas.Top="10.5" Width="3" Height="3" Fill="#AAA"/>
                                 <Ellipse Canvas.Left="10.5" Canvas.Top="10.5" Width="3" Height="3" Fill="#AAA"/>
                                 <Ellipse Canvas.Left="6.5" Canvas.Top="3.5" Width="3" Height="3" Fill="#AAA"/>
@@ -109,16 +102,16 @@
                     </Button>
                     
                     <!-- Settings Button -->
-                    <Button WindowChrome.IsHitTestVisibleInChrome="True" Style="{StaticResource TitleBarButton}" Click="Settings_Click" ToolTip="Settings">
+                    <Button Classes="TitleBarButton" Click="Settings_Click" ToolTip.Tip="Settings">
                         <Viewbox Width="14" Height="14">
-                            <Path Data="M8,5.5 A2.5,2.5 0 1,0 8,10.5 A2.5,2.5 0 1,0 8,5.5 M8,1 L8,3 M8,13 L8,15 M1,8 L3,8 M13,8 L15,8 M3,3 L4.4,4.4 M11.6,11.6 L13,13 M13,3 L11.6,4.4 M4.4,11.6 L3,13" Stroke="#AAA" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <Path Data="M8,5.5 A2.5,2.5 0 1,0 8,10.5 A2.5,2.5 0 1,0 8,5.5 M8,1 L8,3 M8,13 L8,15 M1,8 L3,8 M13,8 L15,8 M3,3 L4.4,4.4 M11.6,11.6 L13,13 M13,3 L11.6,4.4 M4.4,11.6 L3,13" Stroke="#AAA" StrokeThickness="1.5" StrokeLineCap="Round"/>
                         </Viewbox>
                     </Button>
                     
                     <!-- Close Button -->
-                    <Button WindowChrome.IsHitTestVisibleInChrome="True" Style="{StaticResource TitleBarButton}" Click="Close_Click">
+                    <Button Classes="TitleBarButton" Click="Close_Click">
                         <Viewbox Width="10" Height="10">
-                            <Path Data="M0,0 L10,10 M10,0 L0,10" Stroke="#AAA" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <Path Data="M0,0 L10,10 M10,0 L0,10" Stroke="#AAA" StrokeThickness="1.5" StrokeLineCap="Round"/>
                         </Viewbox>
                     </Button>
                 </StackPanel>
@@ -131,7 +124,7 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Models Overlay -->
-                <Border x:Name="ModelsOverlay" Grid.ColumnSpan="2" Background="#88000000" CornerRadius="8" Canvas.ZIndex="100" Visibility="Collapsed" Margin="-20">
+                <Border x:Name="ModelsOverlay" Grid.ColumnSpan="2" Background="#88000000" CornerRadius="8" ZIndex="100" IsVisible="False" Margin="-20">
                     <Border Background="#AA181818" CornerRadius="8" VerticalAlignment="Center" HorizontalAlignment="Center" Width="600" Padding="30" BorderBrush="#33FFFFFF" BorderThickness="1">
                         <StackPanel>
                             <TextBlock Text="AI MODEL MANAGEMENT" Foreground="White" FontSize="24" FontWeight="Black" Margin="0,0,0,20"/>
@@ -150,7 +143,7 @@
                                                 <TextBlock Text="Capability: Fast, general-purpose upscaling. Excellent for photos and basic illustrations." Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,5,15,5"/>
                                                 <TextBlock Text="Format: FP32 · Size: 71MB · GPU VRAM: Low (~1GB)" Foreground="#FF2400" FontSize="11" FontWeight="Bold"/>
                                             </StackPanel>
-                                            <Button x:Name="BtnDownloadEsrgan4" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Style="{StaticResource GlowButton}" Click="DownloadEsrgan4_Click"/>
+                                            <Button x:Name="BtnDownloadEsrgan4" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Classes="GlowButton" Click="DownloadEsrgan4_Click"/>
                                         </Grid>
                                     </Border>
 
@@ -166,7 +159,7 @@
                                                 <TextBlock Text="Capability: Maximum reconstruction quality. UltraSharp detail enhancement, preserves fine textures." Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,5,15,5"/>
                                                 <TextBlock Text="Format: FP32 · Size: 67MB · GPU VRAM: Moderate (~2GB)" Foreground="#FF2400" FontSize="11" FontWeight="Bold"/>
                                             </StackPanel>
-                                            <Button x:Name="BtnDownloadHat" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Style="{StaticResource GlowButton}" Click="DownloadHat_Click"/>
+                                            <Button x:Name="BtnDownloadHat" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Classes="GlowButton" Click="DownloadHat_Click"/>
                                         </Grid>
                                     </Border>
 
@@ -182,7 +175,7 @@
                                                 <TextBlock Text="Capability: Ultra-fast 2x upscaling. Low precision float formats for minimal VRAM impact." Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,5,15,5"/>
                                                 <TextBlock Text="Format: FP16 · Size: 36MB · GPU VRAM: Very Low (&lt;500MB)" Foreground="#FF2400" FontSize="11" FontWeight="Bold"/>
                                             </StackPanel>
-                                            <Button x:Name="BtnDownloadEsrgan2" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Style="{StaticResource GlowButton}" Click="DownloadEsrgan2_Click"/>
+                                            <Button x:Name="BtnDownloadEsrgan2" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Classes="GlowButton" Click="DownloadEsrgan2_Click"/>
                                         </Grid>
                                     </Border>
 
@@ -198,7 +191,7 @@
                                                 <TextBlock Text="Capability: Massive 8x upscaling. Best for extreme detail expansion in fewer passes." Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,5,15,5"/>
                                                 <TextBlock Text="Format: FP16 · Size: 36MB · GPU VRAM: Low (~1GB)" Foreground="#FF2400" FontSize="11" FontWeight="Bold"/>
                                             </StackPanel>
-                                            <Button x:Name="BtnDownloadEsrgan8" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Style="{StaticResource GlowButton}" Click="DownloadEsrgan8_Click"/>
+                                            <Button x:Name="BtnDownloadEsrgan8" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Classes="GlowButton" Click="DownloadEsrgan8_Click"/>
                                         </Grid>
                                     </Border>
 
@@ -214,7 +207,7 @@
                                                 <TextBlock Text="Capability: Enables smart heuristics (detects anime characters, tag labels, and auto-tunes preset modes)." Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,5,15,5"/>
                                                 <TextBlock Text="Components: CLIP Encoders + Classifier · Size: ~2.0GB" Foreground="#FF2400" FontSize="11" FontWeight="Bold"/>
                                             </StackPanel>
-                                            <Button x:Name="BtnDownloadVision" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Style="{StaticResource GlowButton}" Click="DownloadVision_Click"/>
+                                            <Button x:Name="BtnDownloadVision" Grid.Column="1" VerticalAlignment="Center" Padding="10,5" Classes="GlowButton" Click="DownloadVision_Click"/>
                                         </Grid>
                                     </Border>
                                 </StackPanel>
@@ -226,21 +219,20 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
-                                    <ProgressBar x:Name="ModelProgress" Height="8" Background="#111" Foreground="#FF2400" BorderThickness="0" Visibility="Collapsed" Margin="0,0,0,5"/>
-                                    <TextBlock x:Name="ModelStatusText" Text="" Foreground="#AAA" FontSize="11" Visibility="Collapsed"/>
+                                    <ProgressBar x:Name="ModelProgress" Height="8" Background="#111" Foreground="#FF2400" BorderThickness="0" IsVisible="False" Margin="0,0,0,5"/>
+                                    <TextBlock x:Name="ModelStatusText" Text="" Foreground="#AAA" FontSize="11" IsVisible="False"/>
                                 </StackPanel>
-                                <Button Grid.Column="1" Content="BACK TO APP" Style="{StaticResource GlowButton}" Click="CloseModels_Click"/>
+                                <Button Grid.Column="1" Content="BACK TO APP" Classes="GlowButton" Click="CloseModels_Click"/>
                             </Grid>
                         </StackPanel>
                     </Border>
                 </Border>
 
                 <!-- Settings Overlay -->
-                <Border x:Name="SettingsOverlay" Grid.ColumnSpan="2" Background="#88000000" CornerRadius="8" Canvas.ZIndex="100" Visibility="Collapsed" Margin="-20">
-    <Border Background="#AA181818" CornerRadius="8" VerticalAlignment="Center" HorizontalAlignment="Center" Width="400" Padding="30" BorderBrush="#33FFFFFF" BorderThickness="1">
-        <StackPanel>
-            <TextBlock Text="SETTINGS" Foreground="White" FontSize="24" FontWeight="Black" Margin="0,0,0,20"/>
-
+                <Border x:Name="SettingsOverlay" Grid.ColumnSpan="2" Background="#88000000" CornerRadius="8" ZIndex="100" IsVisible="False" Margin="-20">
+                    <Border Background="#AA181818" CornerRadius="8" VerticalAlignment="Center" HorizontalAlignment="Center" Width="400" Padding="30" BorderBrush="#33FFFFFF" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="SETTINGS" Foreground="White" FontSize="24" FontWeight="Black" Margin="0,0,0,20"/>
 
                             <TextBlock Text="DEFAULT SAVE FOLDER" Foreground="#AAA" FontSize="12" FontWeight="Bold" Margin="0,0,0,5"/>
                             <Grid Margin="0,0,0,20">
@@ -249,11 +241,11 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBox x:Name="SaveFolderBox" Background="#222" Foreground="White" BorderBrush="#333" Padding="5" IsReadOnly="True"/>
-                                <Button Grid.Column="1" Content="BROWSE" Style="{StaticResource SecondaryButton}" Margin="10,0,0,0" Click="BrowseFolder_Click"/>
+                                <Button Grid.Column="1" Content="BROWSE" Classes="SecondaryButton" Margin="10,0,0,0" Click="BrowseFolder_Click"/>
                             </Grid>
 
                             <TextBlock Text="UI THEME" Foreground="#AAA" FontSize="12" FontWeight="Bold" Margin="0,0,0,5"/>
-                            <ComboBox x:Name="ThemeSelector" Background="#222" Foreground="White" BorderBrush="#333" Margin="0,0,0,20" SelectionChanged="ThemeSelector_SelectionChanged">
+                            <ComboBox x:Name="ThemeSelector" Background="#222" Foreground="White" BorderBrush="#333" HorizontalAlignment="Stretch" Margin="0,0,0,20" SelectionChanged="ThemeSelector_SelectionChanged">
                                 <ComboBoxItem Content="Red (Original)"/>
                                 <ComboBoxItem Content="Cyber Blue"/>
                                 <ComboBoxItem Content="Toxic Green"/>
@@ -270,7 +262,25 @@
                                 <TextBlock Grid.Column="1" x:Name="GlassText" Text="80%" Foreground="White" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right"/>
                             </Grid>
 
-                            <Button Content="BACK TO APP" Style="{StaticResource GlowButton}" Click="CloseSettings_Click"/>
+                            <Button Content="BACK TO APP" Classes="GlowButton" Click="CloseSettings_Click"/>
+                        </StackPanel>
+                    </Border>
+                </Border>
+
+                <!-- Custom Dialog Overlay (MessageBox replacement) -->
+                <Border x:Name="DialogOverlay" Grid.ColumnSpan="2" Background="#88000000" CornerRadius="8" ZIndex="200" IsVisible="False" Margin="-20">
+                    <Border Background="#AA181818" CornerRadius="8" VerticalAlignment="Center" HorizontalAlignment="Center" Width="450" Padding="30" BorderBrush="#FF2400" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock x:Name="DialogTitleText" Text="ALERT" Foreground="#FF2400" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
+                            <TextBlock x:Name="DialogMessageText" Text="Message goes here." Foreground="White" FontSize="14" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                            <TextBlock x:Name="DialogStatsText" Text="Stats go here." Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10" IsVisible="False"/>
+                            <TextBlock x:Name="DialogCharInfoText" Text="Char info goes here." Foreground="#7CD97C" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,15" IsVisible="False"/>
+                            
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                                <Button x:Name="BtnDialogYes" Content="YES — APPLY FIX" Classes="GlowButton" Margin="0,0,10,0" IsVisible="False" Click="DialogYes_Click"/>
+                                <Button x:Name="BtnDialogNo" Content="NO — NORMAL" Classes="SecondaryButton" Margin="0,0,10,0" IsVisible="False" Click="DialogNo_Click"/>
+                                <Button x:Name="BtnDialogOk" Content="OK" Classes="GlowButton" IsVisible="True" Click="DialogOk_Click"/>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
                 </Border>
@@ -282,8 +292,8 @@
                     <StackPanel MaxWidth="350" HorizontalAlignment="Left">
                         <TextBlock x:Name="HelpText" Text="READY TO ENHANCE" Foreground="#AAA" FontSize="16" Margin="0,20" TextWrapping="Wrap"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
-                            <Button x:Name="ActionButton" Style="{StaticResource GlowButton}" Content="SELECT IMAGE" Click="ActionButton_Click" Margin="0,0,10,0"/>
-                            <Button x:Name="ResetButton" Style="{StaticResource SecondaryButton}" Content="RESET" Click="ResetButton_Click" Visibility="Collapsed"/>
+                            <Button x:Name="ActionButton" Classes="GlowButton" Content="SELECT IMAGE" Click="ActionButton_Click" Margin="0,0,10,0"/>
+                            <Button x:Name="ResetButton" Classes="SecondaryButton" Content="RESET" Click="ResetButton_Click" IsVisible="False"/>
                         </StackPanel>
 
                         <!-- Post-Processing Panel -->
@@ -296,7 +306,7 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="PRESET MODE" Foreground="#AAA" FontSize="14" VerticalAlignment="Center" Width="90"/>
-                                <ComboBox x:Name="PresetSelector" Grid.Column="1" Margin="10,0,0,0" SelectedIndex="0" Background="#222" Foreground="White" BorderBrush="#333" SelectionChanged="PresetSelector_SelectionChanged">
+                                <ComboBox x:Name="PresetSelector" Grid.Column="1" Margin="10,0,0,0" SelectedIndex="0" Background="#222" Foreground="White" BorderBrush="#333" HorizontalAlignment="Stretch" SelectionChanged="PresetSelector_SelectionChanged">
                                     <ComboBoxItem Content="Default"/>
                                     <ComboBoxItem Content="Sticker Mode (General, 5MB)"/>
                                     <ComboBoxItem Content="GIF Mode (Animated)"/>
@@ -310,7 +320,7 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="AI MODEL" Foreground="#AAA" FontSize="14" VerticalAlignment="Center" Width="90"/>
-                                <ComboBox x:Name="ModelSelector" Grid.Column="1" Margin="10,0,0,0" SelectedIndex="0" Background="#222" Foreground="White" BorderBrush="#333">
+                                <ComboBox x:Name="ModelSelector" Grid.Column="1" Margin="10,0,0,0" SelectedIndex="0" Background="#222" Foreground="White" BorderBrush="#333" HorizontalAlignment="Stretch">
                                     <ComboBoxItem Content="Real-ESRGAN x4 (Fast)"/>
                                     <ComboBoxItem Content="HAT x4 / UltraSharp"/>
                                     <ComboBoxItem Content="Real-ESRGAN x2 (FP16)"/>
@@ -335,10 +345,10 @@
                                      <ColumnDefinition Width="*"/>
                                  </Grid.ColumnDefinitions>
                                  <TextBlock Text="CUSTOM SIZE" Foreground="#AAA" FontSize="14" VerticalAlignment="Center" Width="100"/>
-                                 <CheckBox x:Name="UseCustomResolutionCheckbox" Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0" Checked="UseCustomResolutionCheckbox_Changed" Unchecked="UseCustomResolutionCheckbox_Changed" Content="Enable Custom Size" Foreground="White"/>
+                                 <CheckBox x:Name="UseCustomResolutionCheckbox" Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0" IsCheckedChanged="UseCustomResolutionCheckbox_Changed" Content="Enable Custom Size" Foreground="White"/>
                              </Grid>
 
-                             <Grid x:Name="CustomResolutionPanel" Margin="0,5" Visibility="Collapsed">
+                             <Grid x:Name="CustomResolutionPanel" Margin="0,5" IsVisible="False">
                                  <Grid.ColumnDefinitions>
                                      <ColumnDefinition Width="Auto"/>
                                      <ColumnDefinition Width="*"/>
@@ -346,10 +356,10 @@
                                      <ColumnDefinition Width="*"/>
                                  </Grid.ColumnDefinitions>
                                  <TextBlock Text="WIDTH" Foreground="#AAA" FontSize="14" VerticalAlignment="Center" Width="90"/>
-                                 <TextBox x:Name="CustomWidthInput" Grid.Column="1" Margin="10,0,10,0" Background="#222" Foreground="White" BorderBrush="#333" CaretBrush="White" Padding="5" Text="2000" PreviewTextInput="NumberValidationTextBox"/>
+                                 <TextBox x:Name="CustomWidthInput" Grid.Column="1" Margin="10,0,10,0" Background="#222" Foreground="White" BorderBrush="#333" CaretBrush="White" Padding="5" Text="2000" TextInput="NumberValidationTextBox"/>
                                  
                                  <TextBlock Grid.Column="2" Text="HEIGHT" Foreground="#AAA" FontSize="14" VerticalAlignment="Center" Width="60"/>
-                                 <TextBox x:Name="CustomHeightInput" Grid.Column="3" Margin="10,0,0,0" Background="#222" Foreground="White" BorderBrush="#333" CaretBrush="White" Padding="5" Text="3000" PreviewTextInput="NumberValidationTextBox"/>
+                                 <TextBox x:Name="CustomHeightInput" Grid.Column="3" Margin="10,0,0,0" Background="#222" Foreground="White" BorderBrush="#333" CaretBrush="White" Padding="5" Text="3000" TextInput="NumberValidationTextBox"/>
                              </Grid>
 
                             
@@ -384,7 +394,7 @@
                         <TextBlock Text="STATUS:" Foreground="#555" FontSize="12" FontWeight="Bold"/>
                         <TextBlock x:Name="StatusText" Text="READY" Foreground="#FF2400" FontSize="12" FontWeight="Bold" Margin="10,0,0,0"/>
                     </StackPanel>
-                    <ProgressBar x:Name="ProcessingBar" Height="4" Background="#111" Foreground="#FF2400" BorderThickness="0" Margin="0,10,0,0" Visibility="Collapsed"/>
+                    <ProgressBar x:Name="ProcessingBar" Height="4" Background="#111" Foreground="#FF2400" BorderThickness="0" Margin="0,10,0,0" IsVisible="False"/>
                 </StackPanel>
 
                 <!-- Preview Area -->
