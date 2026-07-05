@@ -104,7 +104,7 @@ fn process_upscale_inner(
 
     // 3. Multi-Pass AI Upscaling
     let mut current_img = img;
-    let tiler = Tiler::new(512, 32);
+    let tiler = Tiler::new(256, 16);
 
     while current_img.width() < target_w || current_img.height() < target_h {
         let (w, h) = current_img.dimensions();
@@ -218,7 +218,7 @@ fn process_upscale_gif(
     let mut encoder = GifEncoder::new(out_file);
     encoder.set_repeat(Repeat::Infinite)?;
 
-    let tiler = Tiler::new(512, 32);
+    let tiler = Tiler::new(256, 16);
 
     for (i, frame_result) in frames.enumerate() {
         let frame = frame_result?;
@@ -282,4 +282,56 @@ fn process_upscale_gif(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_upscale_precise_resolutions() {
+        let input_path = "R:\\thingy.png";
+        let model_path = "models/realesrgan-x4plus-anime.onnx";
+        if !std::path::Path::new(input_path).exists() || !std::path::Path::new(model_path).exists() {
+            println!("Skipping test: test files not found.");
+            return;
+        }
+        
+        let resolutions = vec![
+            (1000, "1k"),
+            (2000, "2k"),
+            (3000, "3k"),
+            (4000, "4k"),
+            (5000, "5k"),
+            (6000, "6k"),
+            (7000, "7k"),
+            (8000, "8k"),
+            (10000, "10k"),
+        ];
+
+        for (res, name) in resolutions {
+            let output_path = format!("R:\\thingy_{}.png", name);
+            println!("Testing upscale to {} ({}x{})", name, res, res);
+            
+            let result = process_upscale(
+                input_path,
+                &output_path,
+                model_path,
+                res,
+                res,
+                1.0, // vibrancy
+                0.0, // sharpness
+                0.0, // depixelate
+                0    // preset_mode
+            );
+            
+            assert!(result.is_ok(), "Upscaling failed for {}", name);
+            
+            // Verify output dimensions
+            let out_img = image::open(&output_path).expect("Failed to open output image");
+            assert_eq!(out_img.width(), res, "Width mismatch for {}", name);
+            assert_eq!(out_img.height(), res, "Height mismatch for {}", name);
+            println!("Success: generated {} at exactly {}x{}", name, out_img.width(), out_img.height());
+        }
+    }
 }
